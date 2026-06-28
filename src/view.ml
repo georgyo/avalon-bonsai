@@ -583,6 +583,23 @@ let team_vote_action (local_ graph) =
 let mission_action (local_ graph) =
   let done_, set_done = Bonsai.state false graph in
   let error, set_error = Bonsai.state "" graph in
+  (* reset the optimistic "already submitted" flag whenever the mission changes, so a vote
+     on one mission doesn't suppress the buttons on the next *)
+  let midx =
+    let%arr m = State.value () in
+    match D.game m with
+    | Some g -> g.current_mission_idx
+    | None -> -1
+  in
+  let () =
+    Bonsai.Edge.on_change
+      midx
+      ~equal:Int.equal
+      ~callback:
+        (let%arr set_done = set_done in
+         fun _ -> set_done false)
+      graph
+  in
   let%arr m = State.value () and done_ = done_ and set_done = set_done and error = error and set_error = set_error in
   match D.game m with
   | None -> N.none
@@ -630,26 +647,57 @@ let assassination_action ~selected (local_ graph) =
   | None, _ -> N.none
 ;;
 
+type action_kind =
+  | Propose
+  | Vote
+  | Mission
+  | Assassinate
+  | No_action
+[@@deriving sexp, equal]
+
+(* Only the active action component is instantiated (via [match%sub]); when the phase
+   changes Bonsai resets the inactive branch's state, mirroring the original's v-if
+   remount semantics (so e.g. a mission "already voted" flag doesn't leak across missions). *)
 let action_pane ~selected (local_ graph) =
-  let proposal = team_proposal_action ~selected graph in
-  let vote = team_vote_action graph in
-  let mission = mission_action graph in
-  let assassinate = assassination_action ~selected graph in
-  let%arr m = State.value () and proposal = proposal and vote = vote and mission = mission and assassinate = assassinate in
-  match D.game m with
-  | None -> N.none
-  | Some g ->
-    (match Game.phase g with
-     | "TEAM_PROPOSAL" -> proposal
-     | "PROPOSAL_VOTE" -> vote
-     | "MISSION_VOTE" -> mission
-     | "ASSASSINATION" -> assassinate
-     | _ -> N.none)
+  let kind =
+    let%arr m = State.value () in
+    match D.game m with
+    | None -> No_action
+    | Some g ->
+      (match Game.phase g with
+       | "TEAM_PROPOSAL" -> Propose
+       | "PROPOSAL_VOTE" -> Vote
+       | "MISSION_VOTE" -> Mission
+       | "ASSASSINATION" -> Assassinate
+       | _ -> No_action)
+  in
+  match%sub kind with
+  | Propose -> team_proposal_action ~selected graph
+  | Vote -> team_vote_action graph
+  | Mission -> mission_action graph
+  | Assassinate -> assassination_action ~selected graph
+  | No_action -> Bonsai.return N.none
 ;;
 
 (* ============================ GameBoard ============================ *)
 let game_board (local_ graph) =
   let selected, set_selected = Bonsai.state [] graph ~equal:(List.equal String.equal) in
+  (* clear the team selection whenever the phase changes (original cleared on phase watch) *)
+  let phase =
+    let%arr m = State.value () in
+    match D.game m with
+    | Some g -> Game.phase g
+    | None -> ""
+  in
+  let () =
+    Bonsai.Edge.on_change
+      phase
+      ~equal:String.equal
+      ~callback:
+        (let%arr set_selected = set_selected in
+         fun _ -> set_selected [])
+      graph
+  in
   let missions = game_missions graph in
   let participants = game_participants ~selected ~set_selected graph in
   let actions = action_pane ~selected graph in
