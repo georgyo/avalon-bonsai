@@ -1,0 +1,57 @@
+; ============================================================================
+; Dune package-management workspace for OxCaml  (EXAMPLE / currently BLOCKED)
+; ============================================================================
+; Following https://dune.readthedocs.io/en/latest/tutorials/dune-package-management/oxcaml.html
+;
+; To try it: rename this file to `dune-workspace`, add the `(package ...)` block
+; below to `dune-project`, then run `dune pkg lock`.
+;
+; STATUS: `dune pkg lock` does NOT currently resolve for this project. The oxcaml
+; opam-repository pulls in `oxcaml-patch-guards`, which adds a {post} disjunction
+; `oxcaml-<pkg> | oxcaml-<pkg>-patches` for every patchable package. opam defers
+; {post} deps, but dune's solver eagerly selects the `oxcaml-<pkg>` guard ("patched
+; lib NOT installed"), which then conflicts with the real package our deps require
+; (e.g. bignum -> zarith >= 1.12, fmt -> topkg). The solver does not backtrack to the
+; `-patches` side, so it fails on zarith/topkg/uutf/spawn/... The tutorial's hello-world
+; works only because it never pulls a patched package; bonsai_web + js_of_ocaml always do.
+; Until dune's solver handles these {post} disjunctions (or the oxcaml repo changes the
+; mechanism), build via the opam switch instead — see docs/dune-package-management.md.
+; ----------------------------------------------------------------------------
+
+(lang dune 3.21)
+
+(pkg enabled)
+
+; The preview packages this project uses (bonsai_web, ppx_html, ppx_css ...) live on the
+; `dev` branch, so search it first, then the main oxcaml repo, then upstream (needed for
+; leaf packages like angstrom/uri/uucp — the oxcaml repo is an overlay, not a full fork).
+(repository
+ (name oxcaml-dev)
+ (url git+https://github.com/oxcaml/opam-repository#dev))
+
+(repository
+ (name oxcaml)
+ (url git+https://github.com/oxcaml/opam-repository))
+
+(lock_dir
+ (repositories oxcaml-dev oxcaml upstream))
+
+; ----------------------------------------------------------------------------
+; Add this to dune-project (the `-patches` markers are an attempt to force the
+; "installed" side of the guard disjunction — necessary but still not sufficient
+; given the solver limitation above):
+;
+; (package
+;  (name avalon-bonsai)
+;  (depends
+;   (ocaml-variants (= 5.2.0+ox))
+;   core bonsai bonsai_web virtual_dom
+;   js_of_ocaml js_of_ocaml-ppx js_of_ocaml-compiler
+;   ppx_jane ppx_css ppx_html
+;   oxcaml-zarith-patches oxcaml-topkg-patches oxcaml-uutf-patches
+;   oxcaml-spawn-patches oxcaml-yojson-patches oxcaml-re-patches
+;   oxcaml-sedlex-patches oxcaml-ppxlib-patches oxcaml-ppxlib_ast-patches
+;   oxcaml-ppx_deriving-patches oxcaml-gen_js_api-patches oxcaml-ojs-patches
+;   oxcaml-js_of_ocaml-patches oxcaml-js_of_ocaml-ppx-patches
+;   oxcaml-js_of_ocaml-compiler-patches oxcaml-ocamlfind-patches
+;   oxcaml-ocaml-compiler-libs-patches oxcaml-ocamlc-loc-patches))
