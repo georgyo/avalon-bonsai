@@ -13,9 +13,3 @@
  (deps ../web/index.html)
  (action
   (copy %{deps} %{target})))
-
-(rule
- (target style.css)
- (deps ../web/style.css)
- (action
-  (copy %{deps} %{target})))

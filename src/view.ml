@@ -7,10 +7,15 @@ module D = State.Derived
 module N = Vdom.Node
 module A = Vdom.Attr
 
-(** The view layer: a faithful port of the Vue/Vuetify components, rendered with plain
-    Vdom + CSS (see web/style.css) and FontAwesome / MDI icon fonts loaded in index.html.
-    Every game component guards on [D.game]/[D.role] being present, since Bonsai evaluates
-    all sub-views regardless of which one is displayed. *)
+(** The view layer: a faithful port of the Vue/Vuetify components, rendered with [ppx_html]
+    markup + the scoped [ppx_css] {!Style} module (see [src/style.ml]) and FontAwesome / MDI
+    icon fonts loaded in index.html. Every game component guards on [D.game]/[D.role] being
+    present, since Bonsai evaluates all sub-views regardless of which one is displayed.
+
+    A handful of class names are kept as literal (un-hashed) strings because the Playwright
+    e2e suite and imperative DOM code select on them: [v-list], [v-list-item], [lobby-name],
+    [bottom-sheet] (styled via [:global(...)] in {!Style}), plus the FontAwesome [fa-layers]
+    layering helper and the icon-font classes emitted by [fa]/[mdi]. *)
 
 let run (e : unit Effect.t) : unit = Effect.Expert.handle_non_dom_event_exn e
 let eff f = Effect.of_thunk f
@@ -23,19 +28,17 @@ let swap_at (l : 'a list) i =
   | _ -> l
 ;;
 
-(* ---- Vuetify-ish building blocks ---- *)
-let div ?(cls = []) children = N.div ~attrs:[ A.classes cls ] children
-let spanc ?(cls = []) children = N.span ~attrs:[ A.classes cls ] children
-let card ?(cls = []) children = N.div ~attrs:[ A.classes ("v-card" :: cls) ] children
-let card_title ?(cls = []) children = N.div ~attrs:[ A.classes ("v-card-title" :: cls) ] children
-let card_text ?(cls = []) children = N.div ~attrs:[ A.classes ("v-card-text" :: cls) ] children
+(* ---- building blocks, rendered with ppx_html + the Style module ---- *)
+let div ?(attrs = []) children = {%html.jsx|<div *{attrs}>*{children}</div>|}
+let spanc ?(attrs = []) children = {%html.jsx|<span *{attrs}>*{children}</span>|}
+let card ?(attrs = []) children = {%html.jsx|<div *{Style.card :: attrs}>*{children}</div>|}
+let card_title ?(attrs = []) children = {%html.jsx|<div *{Style.card_title :: attrs}>*{children}</div>|}
+let card_text ?(attrs = []) children = {%html.jsx|<div *{Style.card_text :: attrs}>*{children}</div>|}
 
-let btn ?(cls = []) ?(disabled = false) ?(loading = false) ~on_click children =
-  let attrs =
-    [ A.classes ("v-btn" :: cls); A.on_click (fun _ -> on_click) ]
-    @ (if disabled || loading then [ A.disabled' true ] else [])
-  in
-  N.button ~attrs (if loading then [ N.span ~attrs:[ A.class_ "spinner" ] [] ] else children)
+let btn ?(attrs = []) ?(disabled = false) ?(loading = false) ~on_click children =
+  let attrs = (Style.btn :: attrs) @ (if disabled || loading then [ A.disabled' true ] else []) in
+  let children = if loading then [ {%html.jsx|<span *{[ Style.spinner ]}></span>|} ] else children in
+  {%html.jsx|<button *{attrs} on_click=%{fun _ -> on_click}>*{children}</button>|}
 ;;
 
 let fa ?(color = "") kind name =
@@ -46,26 +49,29 @@ let fa ?(color = "") kind name =
 let mdi name = N.create "i" ~attrs:[ A.classes [ "mdi"; "mdi-" ^ name ] ] []
 let team_icon (t : team) = match t with Good -> fa "fab" "fa-old-republic" | Evil -> fa ~color:"red" "fab" "fa-empire"
 
+(* FontAwesome icon stacking; [fa-layers] is kept as a literal class (it is the external
+   library's hook, styled via :global in Style). *)
+let fa_layers ?(attrs = []) children = {%html.jsx|<span *{A.class_ "fa-layers" :: attrs}>*{children}</span>|}
+
 let overlay ?(fullscreen = false) ~on_close children =
-  N.div
-    ~attrs:[ A.classes [ "overlay" ]; A.on_click (fun _ -> on_close) ]
-    [ N.div
-        ~attrs:[ A.classes (if fullscreen then [ "overlay-card"; "fullscreen" ] else [ "overlay-card" ]); A.on_click (fun _ -> Effect.Many []) ]
-        children
-    ]
+  let inner = if fullscreen then [ Style.overlay_card; Style.fullscreen ] else [ Style.overlay_card ] in
+  {%html.jsx|
+    <div *{[ Style.overlay ]} on_click=%{fun _ -> on_close}>
+      <div *{inner} on_click=%{fun _ -> Effect.Many []}>*{children}</div>
+    </div>
+  |}
 ;;
 
-let text_field ?(cls = []) ?(typ = "text") ?(placeholder = "") ?(extra = []) ~value ~on_input () =
-  N.input
-    ~attrs:
-      ([ A.classes ("text-field" :: cls); A.type_ typ; A.placeholder placeholder
-       ; A.value_prop value; A.on_input (fun _ s -> on_input s)
-       ]
-       @ extra)
-    ()
+let text_field ?(attrs = []) ?(typ = "text") ?(placeholder = "") ?(extra = []) ~value ~on_input () =
+  let all =
+    (Style.text_field :: attrs)
+    @ [ A.type_ typ; A.placeholder placeholder; A.value_prop value; A.on_input (fun _ s -> on_input s) ]
+    @ extra
+  in
+  {%html.jsx|<input *{all} />|}
 ;;
 
-let field_error error = if String.is_empty error then N.none else N.div ~attrs:[ A.class_ "field-error" ] [ N.text error ]
+let field_error error = if String.is_empty error then N.none else {%html.jsx|<div *{[ Style.field_error ]}>#{error}</div>|}
 
 (* ============================ StatsDisplay ============================ *)
 let stats_display (stats : stats option) (global : stats option) =
@@ -74,7 +80,9 @@ let stats_display (stats : stats option) (global : stats option) =
   let evil = games - good in
   let evil_wins = wins - good_wins in
   let pct n d = if d > 0 then sprintf "%d%%" (Float.to_int (100. *. Float.of_int n /. Float.of_int d)) else "N/A" in
-  let row label a b c = N.tr [ N.td ~attrs:[ A.class_ "fw" ] [ N.text label ]; N.td [ N.text a ]; N.td [ N.text b ]; N.td [ N.text c ] ] in
+  let row label a b c =
+    N.tr [ N.td ~attrs:[ Style.fw ] [ N.text label ]; N.td [ N.text a ]; N.td [ N.text b ]; N.td [ N.text c ] ]
+  in
   let playtime =
     let secs = s.playtime_seconds in
     let hours = Float.of_int secs /. 60. /. 60. in
@@ -86,7 +94,7 @@ let stats_display (stats : stats option) (global : stats option) =
     match global with
     | Some g when g.games > 0 ->
       [ N.tr
-          [ N.td ~attrs:[ A.class_ "fw" ] [ N.text "All Users" ]
+          [ N.td ~attrs:[ Style.fw ] [ N.text "All Users" ]
           ; N.td [ N.text (pct g.good_wins g.games) ]
           ; N.td [ N.text (pct (g.games - g.good_wins) g.games) ]
           ; N.td []
@@ -94,19 +102,24 @@ let stats_display (stats : stats option) (global : stats option) =
       ]
     | _ -> []
   in
-  div ~cls:[ "col"; "center"; "stats-wrap" ]
-    [ N.table
-        [ N.thead [ N.tr ~attrs:[ A.class_ "stats-header" ] [ N.td []; N.td [ N.text "Good" ]; N.td [ N.text "Evil" ]; N.td [ N.text "Total" ] ] ]
-        ; N.tbody
-            ([ row "Games" (Int.to_string good) (Int.to_string evil) (Int.to_string games)
-             ; row "Wins" (Int.to_string good_wins) (Int.to_string evil_wins) (Int.to_string wins)
-             ; row "Losses" (Int.to_string (good - good_wins)) (Int.to_string (evil - evil_wins)) (Int.to_string (games - wins))
-             ; row "Win Rate" (pct good_wins good) (pct evil_wins evil) (pct wins games)
-             ]
-             @ global_rows)
-        ]
-    ; div ~cls:[ "pt-2" ] [ N.div [ textf "Total Playtime: %s" playtime ] ]
-    ]
+  let table =
+    N.table
+      [ N.thead [ N.tr ~attrs:[ Style.stats_header ] [ N.td []; N.td [ N.text "Good" ]; N.td [ N.text "Evil" ]; N.td [ N.text "Total" ] ] ]
+      ; N.tbody
+          ([ row "Games" (Int.to_string good) (Int.to_string evil) (Int.to_string games)
+           ; row "Wins" (Int.to_string good_wins) (Int.to_string evil_wins) (Int.to_string wins)
+           ; row "Losses" (Int.to_string (good - good_wins)) (Int.to_string (evil - evil_wins)) (Int.to_string (games - wins))
+           ; row "Win Rate" (pct good_wins good) (pct evil_wins evil) (pct wins games)
+           ]
+           @ global_rows)
+      ]
+  in
+  {%html.jsx|
+    <div *{[ Style.col; Style.center; Style.stats_wrap ]}>
+      %{table}
+      <div *{[ Style.pt_2 ]}><div>%{textf "Total Playtime: %s" playtime}</div></div>
+    </div>
+  |}
 ;;
 
 (* ============================ RoleList (selectable, lobby) ============================ *)
@@ -119,38 +132,52 @@ let selectable_role_list (local_ graph) =
     let is_sel = Set.mem selected role.name in
     let checkbox =
       if allow
-      then N.input ~attrs:[ A.type_ "checkbox"; A.checked_prop is_sel; A.on_click (fun _ -> eff (fun () -> State.toggle_role ~name:role.name ~selected:(not is_sel))) ] ()
+      then
+        N.input
+          ~attrs:[ A.type_ "checkbox"; A.checked_prop is_sel; A.on_click (fun _ -> eff (fun () -> State.toggle_role ~name:role.name ~selected:(not is_sel))) ]
+          ()
       else N.none
     in
-    N.create "li" ~attrs:[ A.class_ "v-list-item" ]
-      [ div ~cls:[ "li-prepend" ] [ checkbox; team_icon role.team ]
-      ; div ~cls:[ "li-title" ] [ N.text role.name ]
-      ; btn ~cls:[ "icon-btn" ] ~on_click:(set_info (Some role)) [ mdi "information" ]
-      ]
+    let info_btn = btn ~attrs:[ Style.icon_btn ] ~on_click:(set_info (Some role)) [ mdi "information" ] in
+    {%html.jsx|
+      <li class="v-list-item">
+        <div *{[ Style.li_prepend ]}>%{checkbox}%{team_icon role.team}</div>
+        <div *{[ Style.li_title ]}>#{role.name}</div>
+        %{info_btn}
+      </li>
+    |}
   in
-  N.div
-    [ N.create "ul" ~attrs:[ A.class_ "v-list" ] (List.map Avalonlib.selectable_roles ~f:item)
-    ; (match info with
-       | None -> N.none
-       | Some role ->
-         overlay ~on_close:(set_info None)
-           [ card_title ~cls:[ "title-bar" ] [ team_icon role.team; N.h3 [ N.text role.name ] ]; card_text [ N.text role.description ] ])
-    ]
+  let dialog =
+    match info with
+    | None -> N.none
+    | Some role ->
+      overlay ~on_close:(set_info None)
+        [ card_title ~attrs:[ Style.title_bar ] [ team_icon role.team; N.h3 [ N.text role.name ] ]; card_text [ N.text role.description ] ]
+  in
+  let items = List.map Avalonlib.selectable_roles ~f:item in
+  {%html.jsx|<div><ul class="v-list">*{items}</ul>%{dialog}</div>|}
 ;;
 
 (* static role display (in-game participants tab) *)
 let role_list_view (roles : role list) =
-  N.create "ul" ~attrs:[ A.class_ "v-list" ]
-    (List.map roles ~f:(fun (role : role) ->
-       N.create "li" ~attrs:[ A.class_ "v-list-item"; A.create "title" role.description ]
-         [ div ~cls:[ "li-prepend" ] [ team_icon role.team ]; div ~cls:[ "li-title" ] [ N.text role.name ] ]))
+  let item (role : role) =
+    let attrs = [ A.class_ "v-list-item"; A.create "title" role.description ] in
+    {%html.jsx|
+      <li *{attrs}>
+        <div *{[ Style.li_prepend ]}>%{team_icon role.team}</div>
+        <div *{[ Style.li_title ]}>#{role.name}</div>
+      </li>
+    |}
+  in
+  let items = List.map roles ~f:item in
+  {%html.jsx|<ul class="v-list">*{items}</ul>|}
 ;;
 
 (* ============================ MissionSummaryTable ============================ *)
 let mission_summary_table ~players ~(missions : mission list) ~(roles : role_assignment list option) ~(mission_votes : bool String.Map.t list option) =
   let proposals_of (m : mission) = List.filter m.proposals ~f:(fun p -> not (List.is_empty p.team)) in
   let cell_for player (proposal : proposal) =
-    N.create "span" ~attrs:[ A.class_ "fa-layers" ]
+    fa_layers
       (List.filter_opt
          [ (if String.equal proposal.proposer player then Some (fa ~color:"gold" "fas" "fa-circle") else None)
          ; (if List.mem proposal.team player ~equal:String.equal then Some (fa ~color:"#629ec1" "far" "fa-circle") else None)
@@ -162,7 +189,9 @@ let mission_summary_table ~players ~(missions : mission list) ~(roles : role_ass
   let row player =
     let role_cell =
       match roles with
-      | Some rs -> let r = List.find rs ~f:(fun r -> String.equal r.name player) in [ N.td ~attrs:[ A.class_ "role" ] [ N.text (Option.value_map r ~default:"" ~f:(fun r -> r.role)) ] ]
+      | Some rs ->
+        let r = List.find rs ~f:(fun r -> String.equal r.name player) in
+        [ N.td ~attrs:[ Style.role_cell ] [ N.text (Option.value_map r ~default:"" ~f:(fun r -> r.role)) ] ]
       | None -> []
     in
     let mission_cells =
@@ -174,15 +203,15 @@ let mission_summary_table ~players ~(missions : mission list) ~(roles : role_ass
             if List.mem m.team player ~equal:String.equal
             then (
               let v = Option.bind (List.nth mv midx) ~f:(fun map -> Map.find map player) in
-              [ N.td ~attrs:[ A.class_ "mission-result" ] [ (match v with Some true -> fa ~color:"green" "fas" "fa-check-circle" | _ -> fa ~color:"red" "fas" "fa-times-circle") ] ])
-            else [ N.td ~attrs:[ A.class_ "mission-result" ] [] ]
+              [ N.td ~attrs:[ Style.mission_result ] [ (match v with Some true -> fa ~color:"green" "fas" "fa-check-circle" | _ -> fa ~color:"red" "fas" "fa-times-circle") ] ])
+            else [ N.td ~attrs:[ Style.mission_result ] [] ]
           | None -> []
         in
         prop_cells @ result_cell)
     in
-    N.tr ([ N.td ~attrs:[ A.class_ "player-name" ] [ spanc ~cls:[ "fw" ] [ N.text player ] ] ] @ role_cell @ mission_cells)
+    N.tr ([ N.td ~attrs:[ Style.player_name ] [ spanc ~attrs:[ Style.fw ] [ N.text player ] ] ] @ role_cell @ mission_cells)
   in
-  N.table ~attrs:[ A.class_ "summary-table" ] (List.map players ~f:row)
+  N.table ~attrs:[ Style.summary_table ] (List.map players ~f:row)
 ;;
 
 (* ============================ GameAchievements ============================ *)
@@ -192,14 +221,24 @@ let achievements (g : Game.t) =
     let badges = Analysis.get_badges (Analysis.create g.data ~role_map:Avalonlib.role_map) in
     if List.is_empty badges
     then N.none
-    else
-      div ~cls:[ "pt-6" ]
-        (div ~cls:[ "text-h4"; "center" ] [ N.text "Achievements" ]
-         :: List.map badges ~f:(fun b ->
-              div ~cls:[ "pt-2" ]
-                [ card ~cls:[ "achievement" ]
-                    [ card_title ~cls:[ "title-bar" ] [ fa ~color:"gold" "fas" "fa-trophy"; div ~cls:[ "text-h6" ] [ N.text b.title ] ]; card_text [ N.text b.body ] ]
-                ]))
+    else (
+      let badge (b : Analysis.badge) =
+        {%html.jsx|
+          <div *{[ Style.pt_2 ]}>
+            %{card ~attrs:[ Style.achievement ]
+                 [ card_title ~attrs:[ Style.title_bar ] [ fa ~color:"gold" "fas" "fa-trophy"; div ~attrs:[ Style.text_h6 ] [ N.text b.title ] ]
+                 ; card_text [ N.text b.body ]
+                 ]}
+          </div>
+        |}
+      in
+      let badge_nodes = List.map badges ~f:badge in
+      {%html.jsx|
+        <div *{[ Style.pt_6 ]}>
+          <div *{[ Style.text_h4; Style.center ]}>Achievements</div>
+          *{badge_nodes}
+        </div>
+      |})
   | _ -> N.none
 ;;
 
@@ -225,7 +264,6 @@ let user_login (local_ graph) =
         ~on_err:(fun e -> run (set_error e); run (set_submitting false)))
   in
   let anon = eff (fun () -> run (set_error ""); State.sign_in_anonymously ~on_err:(fun e -> run (set_error e)) ()) in
-  (* Rendered with ppx_html + the ppx_css [Style] module (scoped, co-located CSS). *)
   let field_err = if String.is_empty error then N.none else {%html.jsx|<div *{[ Style.field_error ]}>#{error}</div>|} in
   let alert =
     match m.confirming_email_error with
@@ -315,27 +353,31 @@ let lobby_select (local_ graph) =
       run (set_joining true);
       State.join_lobby ~name ~lobby ~on_ok:(fun () -> run (set_joining false)) ~on_err:(fun e -> run (set_error e); run (set_joining false)) ())
   in
-  N.div ~attrs:[ A.class_ "lobby-select" ]
-    [ div ~cls:[ "col"; "center"; "lobby-inner" ]
-        ((if not show_lobby_input
-          then
-            [ text_field ~cls:[ "upper" ] ~placeholder:"Your Name" ~value:name ~on_input:(fun s -> set_name (String.uppercase s)) ()
-            ; field_error error
-            ; div ~cls:[ "col"; "ga-2"; "lobby-buttons" ]
-                [ btn ~disabled:(String.is_empty name) ~loading:creating ~on_click:do_create [ N.text "Create Lobby" ]
-                ; btn ~disabled:(String.is_empty name || creating) ~on_click:(set_show_lobby_input true) [ N.text "Join Lobby" ]
-                ]
-            ]
-          else
-            [ text_field ~cls:[ "upper" ] ~placeholder:"Lobby" ~value:lobby ~on_input:(fun s -> set_lobby (String.uppercase s)) ~extra:[ on_enter do_join ] ()
-            ; field_error error
-            ; div ~cls:[ "col"; "ga-2"; "lobby-buttons" ]
-                [ btn ~disabled:(String.is_empty lobby) ~loading:joining ~on_click:do_join [ N.text "Join Lobby" ]
-                ; btn ~disabled:joining ~on_click:(set_show_lobby_input false) [ N.text "Cancel" ]
-                ]
-            ])
-         @ [ div ~cls:[ "pt-8" ] []; stats_display (Option.bind m.user ~f:(fun u -> u.stats)) m.global_stats ])
-    ]
+  let form =
+    if not show_lobby_input
+    then
+      [ text_field ~attrs:[ Style.upper ] ~placeholder:"Your Name" ~value:name ~on_input:(fun s -> set_name (String.uppercase s)) ()
+      ; field_error error
+      ; div ~attrs:[ Style.col; Style.ga_2; Style.lobby_buttons ]
+          [ btn ~disabled:(String.is_empty name) ~loading:creating ~on_click:do_create [ N.text "Create Lobby" ]
+          ; btn ~disabled:(String.is_empty name || creating) ~on_click:(set_show_lobby_input true) [ N.text "Join Lobby" ]
+          ]
+      ]
+    else
+      [ text_field ~attrs:[ Style.upper ] ~placeholder:"Lobby" ~value:lobby ~on_input:(fun s -> set_lobby (String.uppercase s)) ~extra:[ on_enter do_join ] ()
+      ; field_error error
+      ; div ~attrs:[ Style.col; Style.ga_2; Style.lobby_buttons ]
+          [ btn ~disabled:(String.is_empty lobby) ~loading:joining ~on_click:do_join [ N.text "Join Lobby" ]
+          ; btn ~disabled:joining ~on_click:(set_show_lobby_input false) [ N.text "Cancel" ]
+          ]
+      ]
+  in
+  let children = form @ [ div ~attrs:[ Style.pt_8 ] []; stats_display (Option.bind m.user ~f:(fun u -> u.stats)) m.global_stats ] in
+  {%html.jsx|
+    <div *{[ Style.lobby_select ]}>
+      <div *{[ Style.col; Style.center; Style.lobby_inner ]}>*{children}</div>
+    </div>
+  |}
 ;;
 
 (* ============================ LobbyPlayerList ============================ *)
@@ -355,31 +397,38 @@ let lobby_player_list (local_ graph) =
     let reorder =
       if can_reorder
       then
-        [ btn ~cls:[ "icon-btn" ] ~disabled:(idx = 0) ~on_click:(eff (fun () -> State.set_player_list (swap_at m.player_list (idx - 1)))) [ mdi "chevron-up" ]
-        ; btn ~cls:[ "icon-btn" ] ~disabled:(idx = n - 1) ~on_click:(eff (fun () -> State.set_player_list (swap_at m.player_list idx))) [ mdi "chevron-down" ]
+        [ btn ~attrs:[ Style.icon_btn ] ~disabled:(idx = 0) ~on_click:(eff (fun () -> State.set_player_list (swap_at m.player_list (idx - 1)))) [ mdi "chevron-up" ]
+        ; btn ~attrs:[ Style.icon_btn ] ~disabled:(idx = n - 1) ~on_click:(eff (fun () -> State.set_player_list (swap_at m.player_list idx))) [ mdi "chevron-down" ]
         ]
       else []
     in
     let kick_btn =
       if D.is_admin m && (not (String.equal player me)) && not (D.is_game_in_progress m)
-      then [ btn ~cls:[ "icon-btn" ] ~on_click:(set_kick_target (Some player)) [ mdi "close" ] ]
+      then [ btn ~attrs:[ Style.icon_btn ] ~on_click:(set_kick_target (Some player)) [ mdi "close" ] ]
       else []
     in
-    N.create "li" ~attrs:[ A.class_ "v-list-item" ]
-      ([ div ~cls:[ "li-prepend" ] (reorder @ [ prepend_icon ]); div ~cls:[ "li-title" ] [ N.text player ] ] @ kick_btn)
+    let prepend = div ~attrs:[ Style.li_prepend ] (reorder @ [ prepend_icon ]) in
+    {%html.jsx|
+      <li class="v-list-item">
+        %{prepend}
+        <div *{[ Style.li_title ]}>#{player}</div>
+        *{kick_btn}
+      </li>
+    |}
   in
-  N.div
-    [ N.create "ul" ~attrs:[ A.class_ "v-list" ] (List.mapi m.player_list ~f:item)
-    ; (match kick_target with
-       | None -> N.none
-       | Some player ->
-         overlay ~on_close:(set_kick_target None)
-           [ card_title ~cls:[ "title-bar" ] [ N.h3 [ textf "Kick %s?" player ] ]
-           ; card_text [ textf "Do you wish to kick %s from the lobby?" player ]
-           ; div ~cls:[ "row"; "actions" ]
-               [ btn ~on_click:(eff (fun () -> run (set_kick_target None); State.kick_player player)) [ textf "Kick %s" player ]; btn ~on_click:(set_kick_target None) [ N.text "Cancel" ] ]
-           ])
-    ]
+  let items = List.mapi m.player_list ~f:item in
+  let dialog =
+    match kick_target with
+    | None -> N.none
+    | Some player ->
+      overlay ~on_close:(set_kick_target None)
+        [ card_title ~attrs:[ Style.title_bar ] [ N.h3 [ textf "Kick %s?" player ] ]
+        ; card_text [ textf "Do you wish to kick %s from the lobby?" player ]
+        ; div ~attrs:[ Style.row; Style.actions ]
+            [ btn ~on_click:(eff (fun () -> run (set_kick_target None); State.kick_player player)) [ textf "Kick %s" player ]; btn ~on_click:(set_kick_target None) [ N.text "Cancel" ] ]
+        ]
+  in
+  {%html.jsx|<div><ul class="v-list">*{items}</ul>%{dialog}</div>|}
 ;;
 
 (* ============================ GameLobby ============================ *)
@@ -403,26 +452,34 @@ let game_lobby (local_ graph) =
     else None
   in
   let start = eff (fun () -> run (set_starting true); State.start_game ~in_game_log ~on_ok:(fun () -> run (set_starting false)) ~on_err:(fun _ -> run (set_starting false)) ()) in
-  div ~cls:[ "container" ]
-    [ div ~cls:[ "row"; "wrap"; "start" ]
-        [ div ~cls:[ "col6" ]
-            [ N.p ~attrs:[ A.class_ "label" ] [ N.text "Players" ]
-            ; players
-            ; (if D.is_admin m && num_players > 2 then N.p ~attrs:[ A.class_ "caption" ] [ N.text "Use the arrows to set seating order" ] else N.none)
-            ]
-        ; (if valid_team_size then div ~cls:[ "col6" ] [ N.p ~attrs:[ A.class_ "label" ] [ N.text "Special Roles Available" ]; roles ] else N.none)
-        ]
-    ; (if valid_team_size
-       then div ~cls:[ "row"; "center" ] [ N.p ~attrs:[ A.class_ "text-h6"; A.class_ "label" ] [ textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil ] ]
-       else N.none)
-    ; div ~cls:[ "row"; "center"; "pt-2" ]
-        [ (match reason_not_start with
-           | None -> btn ~loading:starting ~on_click:start [ mdi "play"; N.text "Start Game" ]
-           | Some reason -> card ~cls:[ "info-card" ] [ card_text ~cls:[ "center" ] [ N.text reason ] ])
-        ]
-    ; N.label ~attrs:[ A.class_ "checkbox-row" ]
-        [ N.input ~attrs:[ A.type_ "checkbox"; A.checked_prop in_game_log; A.on_click (fun _ -> set_in_game_log (not in_game_log)) ] (); N.text " In-game log" ]
-    ]
+  let seating_hint = if D.is_admin m && num_players > 2 then {%html.jsx|<p *{[ Style.caption ]}>Use the arrows to set seating order</p>|} else N.none in
+  let roles_col = if valid_team_size then {%html.jsx|<div *{[ Style.col6 ]}><p *{[ Style.label ]}>Special Roles Available</p>%{roles}</div>|} else N.none in
+  let counts =
+    if valid_team_size
+    then {%html.jsx|<div *{[ Style.row; Style.center ]}><p *{[ Style.text_h6; Style.label ]}>%{textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil}</p></div>|}
+    else N.none
+  in
+  let start_area =
+    match reason_not_start with
+    | None -> btn ~loading:starting ~on_click:start [ mdi "play"; N.text "Start Game" ]
+    | Some reason -> card ~attrs:[ Style.info_card ] [ card_text ~attrs:[ Style.center ] [ N.text reason ] ]
+  in
+  let log_attrs = [ A.type_ "checkbox"; A.checked_prop in_game_log; A.on_click (fun _ -> set_in_game_log (not in_game_log)) ] in
+  {%html.jsx|
+    <div *{[ Style.container ]}>
+      <div *{[ Style.row; Style.wrap; Style.start ]}>
+        <div *{[ Style.col6 ]}>
+          <p *{[ Style.label ]}>Players</p>
+          %{players}
+          %{seating_hint}
+        </div>
+        %{roles_col}
+      </div>
+      %{counts}
+      <div *{[ Style.row; Style.center; Style.pt_2 ]}>%{start_area}</div>
+      <label *{[ Style.checkbox_row ]}><input *{log_attrs} />#{" In-game log"}</label>
+    </div>
+  |}
 ;;
 
 (* ============================ GameMissions ============================ *)
@@ -454,15 +511,14 @@ let game_missions (local_ graph) =
       let icon =
         match mission.state with
         | M_pending ->
-          N.create "span" ~attrs:[ A.class_ "fa-layers" ]
-            [ fa ~color:(if is_future idx then "gray" else "black") "far" "fa-circle"; spanc ~cls:[ "layers-text" ] [ N.text (Int.to_string mission.team_size) ] ]
+          fa_layers [ fa ~color:(if is_future idx then "gray" else "black") "far" "fa-circle"; spanc ~attrs:[ Style.layers_text ] [ N.text (Int.to_string mission.team_size) ] ]
         | Fail -> fa ~color:"red" "far" "fa-times-circle"
         | Success -> fa ~color:"green" "far" "fa-check-circle"
       in
-      btn ~cls:(if active = idx then [ "tab"; "tab-active" ] else [ "tab" ]) ~on_click:(set_active idx) [ icon ]
+      btn ~attrs:(if active = idx then [ Style.tab; Style.tab_active ] else [ Style.tab ]) ~on_click:(set_active idx) [ icon ]
     in
     let panel idx (mission : mission) =
-      let cls = match mission.state with Fail -> "bg-fail" | Success -> "bg-success" | M_pending -> "bg-pending" in
+      let bg = match mission.state with Fail -> Style.bg_fail | Success -> Style.bg_success | M_pending -> Style.bg_pending in
       let header =
         let status =
           if idx = g.current_mission_idx && not (String.equal (Game.phase g) "ASSASSINATION") then "CURRENT"
@@ -476,12 +532,11 @@ let game_missions (local_ graph) =
         | _ -> N.div [ textf "Team: %s" (Util.join_with_and mission.team) ]
       in
       let log = if (Game.data g).in_game_log then mission_summary_table ~players:(Game.players g) ~missions:[ mission ] ~roles:None ~mission_votes:None else N.none in
-      card ~cls:[ cls; "mission-panel" ] [ card_text ~cls:[ "caption" ] [ header; detail; log ] ]
+      card ~attrs:[ bg; Style.mission_panel ] [ card_text ~attrs:[ Style.caption ] [ header; detail; log ] ]
     in
-    N.div
-      [ div ~cls:[ "tabs" ] (List.mapi missions ~f:tab)
-      ; (match List.nth missions active with Some mission -> panel active mission | None -> N.none)
-      ]
+    let tabs = List.mapi missions ~f:tab in
+    let panel_node = match List.nth missions active with Some mission -> panel active mission | None -> N.none in
+    {%html.jsx|<div><div *{[ Style.tabs ]}>*{tabs}</div>%{panel_node}</div>|}
 ;;
 
 (* ============================ GamePlayerList ============================ *)
@@ -539,7 +594,7 @@ let game_player_list ~selected ~set_selected (local_ graph) =
              else None)
           ]
       in
-      if List.is_empty icons then N.none else N.create "span" ~attrs:[ A.class_ "fa-layers" ] icons
+      if List.is_empty icons then N.none else fa_layers icons
     in
     let item name =
       let checkbox =
@@ -549,18 +604,24 @@ let game_player_list ~selected ~set_selected (local_ graph) =
       in
       let marker =
         if Option.value_map g.current_proposer ~default:false ~f:(String.equal name)
-        then N.create "span" ~attrs:[ A.class_ "fa-layers"; A.create "title" (sprintf "%s is proposing the next team" name) ] [ fa ~color:crown_color "fas" "fa-crown"; spanc ~cls:[ "layers-text" ] [ N.text (Int.to_string (g.current_proposal_idx + 1)) ] ]
+        then
+          fa_layers
+            ~attrs:[ A.create "title" (sprintf "%s is proposing the next team" name) ]
+            [ fa ~color:crown_color "fas" "fa-crown"; spanc ~attrs:[ Style.layers_text ] [ N.text (Int.to_string (g.current_proposal_idx + 1)) ] ]
         else if Option.value_map g.hammer ~default:false ~f:(String.equal name) then fa "fas" "fa-hammer"
         else N.none
       in
-      N.create "li" ~attrs:[ A.class_ "v-list-item" ]
-        [ div ~cls:[ "li-prepend" ] [ checkbox ]
-        ; div ~cls:[ "li-mid" ] [ marker ]
-        ; div ~cls:[ "li-title" ] [ N.text name ]
-        ; div ~cls:[ "li-append" ] [ status_icons name ]
-        ]
+      {%html.jsx|
+        <li class="v-list-item">
+          <div *{[ Style.li_prepend ]}>%{checkbox}</div>
+          <div *{[ Style.li_mid ]}>%{marker}</div>
+          <div *{[ Style.li_title ]}>#{name}</div>
+          <div *{[ Style.li_append ]}>%{status_icons name}</div>
+        </li>
+      |}
     in
-    N.create "ul" ~attrs:[ A.class_ "v-list" ] (List.map (Game.players g) ~f:item)
+    let items = List.map (Game.players g) ~f:item in
+    {%html.jsx|<ul class="v-list">*{items}</ul>|}
   | None, _ -> N.none
 ;;
 
@@ -573,13 +634,17 @@ let game_participants ~selected ~set_selected (local_ graph) =
   | None -> N.none
   | Some g ->
     let role_objs = List.filter_map (Game.roles g) ~f:(fun r -> Map.find Avalonlib.role_map r) in
-    N.div
-      [ div ~cls:[ "tabs" ]
-          [ btn ~cls:(if String.equal tab "players" then [ "tab"; "tab-active" ] else [ "tab" ]) ~on_click:(set_tab "players") [ N.text "Players" ]
-          ; btn ~cls:(if String.equal tab "roles" then [ "tab"; "tab-active" ] else [ "tab" ]) ~on_click:(set_tab "roles") [ N.text "Roles" ]
-          ]
-      ; (if String.equal tab "players" then players else role_list_view role_objs)
-      ]
+    let tab_attrs value = if String.equal tab value then [ Style.tab; Style.tab_active ] else [ Style.tab ] in
+    let body = if String.equal tab "players" then players else role_list_view role_objs in
+    {%html.jsx|
+      <div>
+        <div *{[ Style.tabs ]}>
+          <button *{Style.btn :: tab_attrs "players"} on_click=%{fun _ -> set_tab "players"}>Players</button>
+          <button *{Style.btn :: tab_attrs "roles"} on_click=%{fun _ -> set_tab "roles"}>Roles</button>
+        </div>
+        %{body}
+      </div>
+    |}
 ;;
 
 (* ============================ Action panes ============================ *)
@@ -620,14 +685,17 @@ let team_proposal_action ~selected (local_ graph) =
     let team_size = Option.value_map g.current_mission ~default:0 ~f:(fun mi -> mi.team_size) in
     let valid = List.length selected = team_size in
     let propose = eff (fun () -> run (set_proposing true); State.propose_team selected ~on_err:(fun _ -> run (set_proposing false))) in
-    card ~cls:[ "action" ]
-      [ card_title ~cls:[ "action-title" ] [ textf "Team Proposal (%d/5)" (g.current_proposal_idx + 1) ]
-      ; card_text
-          [ (if Option.value_map g.current_proposer ~default:false ~f:(String.equal me)
-             then div ~cls:[ "col"; "center" ] [ N.div ~attrs:[ A.class_ "center" ] [ textf "Propose a team of %d" team_size ]; btn ~disabled:(not valid) ~loading:proposing ~on_click:propose [ N.text "Propose Team" ] ]
-             else div ~cls:[ "center" ] [ textf "Waiting for %s to propose a team of %d" (Option.value g.current_proposer ~default:"") team_size ])
+    let body =
+      if Option.value_map g.current_proposer ~default:false ~f:(String.equal me)
+      then
+        div ~attrs:[ Style.col; Style.center ]
+          [ {%html.jsx|<div *{[ Style.center ]}>%{textf "Propose a team of %d" team_size}</div>|}
+          ; btn ~disabled:(not valid) ~loading:proposing ~on_click:propose [ N.text "Propose Team" ]
           ]
-      ]
+      else {%html.jsx|<div *{[ Style.center ]}>%{textf "Waiting for %s to propose a team of %d" (Option.value g.current_proposer ~default:"") team_size}</div>|}
+    in
+    card ~attrs:[ Style.action ]
+      [ card_title ~attrs:[ Style.action_title ] [ textf "Team Proposal (%d/5)" (g.current_proposal_idx + 1) ]; card_text [ body ] ]
 ;;
 
 let team_vote_action (local_ graph) =
@@ -651,15 +719,15 @@ let team_vote_action (local_ graph) =
     let vote v = eff (fun () -> State.vote_team v ~on_ok:(fun () -> run (set_voted (Some v)))) in
     let voted_yes = Option.value_map voted ~default:false ~f:Fn.id in
     let voted_no = Option.value_map voted ~default:false ~f:not in
-    card ~cls:[ "action" ]
-      [ card_title ~cls:[ "action-title" ] [ textf "Team Proposal Vote (%d/5)" (g.current_proposal_idx + 1) ]
-      ; card_text
-          [ N.div [ textf "Voting for %s team of %s" proposer_label team ]
-          ; div ~cls:[ "row"; "between" ]
-              [ btn ~disabled:(disabled true) ~on_click:(vote true) [ (if voted_yes then fa ~color:"green" "fas" "fa-vote-yea" else fa ~color:"green" "far" "fa-thumbs-up"); N.text " Approve" ]
-              ; btn ~disabled:(disabled false) ~on_click:(vote false) [ (if voted_no then fa ~color:"red" "fas" "fa-vote-yea" else fa ~color:"red" "far" "fa-thumbs-down"); N.text " Reject" ]
-              ]
-          ]
+    let buttons =
+      div ~attrs:[ Style.row; Style.between ]
+        [ btn ~disabled:(disabled true) ~on_click:(vote true) [ (if voted_yes then fa ~color:"green" "fas" "fa-vote-yea" else fa ~color:"green" "far" "fa-thumbs-up"); N.text " Approve" ]
+        ; btn ~disabled:(disabled false) ~on_click:(vote false) [ (if voted_no then fa ~color:"red" "fas" "fa-vote-yea" else fa ~color:"red" "far" "fa-thumbs-down"); N.text " Reject" ]
+        ]
+    in
+    card ~attrs:[ Style.action ]
+      [ card_title ~attrs:[ Style.action_title ] [ textf "Team Proposal Vote (%d/5)" (g.current_proposal_idx + 1) ]
+      ; card_text [ N.div [ textf "Voting for %s team of %s" proposer_label team ]; buttons ]
       ]
 ;;
 
@@ -697,19 +765,17 @@ let mission_action (local_ graph) =
       | _ -> []
     in
     let vote v = eff (fun () -> run (set_done true); run (set_error ""); State.do_mission v ~on_err:(fun _ -> run (set_done false); run (set_error "Vote failed, please try again"))) in
-    card ~cls:[ "action" ]
-      [ card_title ~cls:[ "action-title" ] [ N.text "Mission in Progress" ]
-      ; card_text
-          [ (if needs_to_vote
-             then
-               N.div
-                 [ (if String.is_empty error then N.none else N.div ~attrs:[ A.class_ "field-error center" ] [ N.text error ])
-                 ; div ~cls:[ "row"; "between" ]
-                     [ btn ~on_click:(vote true) [ fa ~color:"green" "fas" "fa-check-circle"; N.text " SUCCESS" ]; btn ~on_click:(vote false) [ fa ~color:"red" "fas" "fa-times-circle"; N.text " FAIL" ] ]
-                 ]
-             else N.div [ N.text (if List.length still_waiting > 0 then "Waiting for " ^ Util.join_with_and still_waiting else "Waiting for results...") ])
+    let body =
+      if needs_to_vote
+      then
+        N.div
+          [ (if String.is_empty error then N.none else {%html.jsx|<div *{[ Style.field_error; Style.center ]}>#{error}</div>|})
+          ; div ~attrs:[ Style.row; Style.between ]
+              [ btn ~on_click:(vote true) [ fa ~color:"green" "fas" "fa-check-circle"; N.text " SUCCESS" ]; btn ~on_click:(vote false) [ fa ~color:"red" "fas" "fa-times-circle"; N.text " FAIL" ] ]
           ]
-      ]
+      else N.div [ N.text (if List.length still_waiting > 0 then "Waiting for " ^ Util.join_with_and still_waiting else "Waiting for results...") ]
+    in
+    card ~attrs:[ Style.action ] [ card_title ~attrs:[ Style.action_title ] [ N.text "Mission in Progress" ]; card_text [ body ] ]
 ;;
 
 let assassination_action ~selected (local_ graph) =
@@ -723,10 +789,11 @@ let assassination_action ~selected (local_ graph) =
     let valid = List.length selected = 1 && Option.value_map target ~default:false ~f:(fun t -> not (String.equal t me)) in
     let label = if valid then "Assassinate " ^ Option.value target ~default:"" else "Select target" in
     let go = eff (fun () -> match target with Some t -> run (set_assassinating true); State.assassinate t ~on_err:(fun _ -> run (set_assassinating false)) | None -> ()) in
-    card ~cls:[ "action" ]
-      [ card_title ~cls:[ "action-title" ] [ N.text "Assassination Attempt" ]
-      ; card_text [ (if assassin then N.div [ btn ~disabled:(not valid) ~loading:assassinating ~on_click:go [ N.text label ] ] else N.div [ N.text "Waiting for target selection" ]) ]
-      ]
+    let body =
+      if assassin then N.div [ btn ~disabled:(not valid) ~loading:assassinating ~on_click:go [ N.text label ] ]
+      else N.div [ N.text "Waiting for target selection" ]
+    in
+    card ~attrs:[ Style.action ] [ card_title ~attrs:[ Style.action_title ] [ N.text "Assassination Attempt" ]; card_text [ body ] ]
   | None, _ -> N.none
 ;;
 
@@ -785,28 +852,37 @@ let game_board (local_ graph) =
   let participants = game_participants ~selected ~set_selected graph in
   let actions = action_pane ~selected graph in
   let%arr missions = missions and participants = participants and actions = actions in
-  div ~cls:[ "game-board" ]
-    [ div ~cls:[ "game-section" ] [ missions ]; div ~cls:[ "game-section" ] [ participants ]; div ~cls:[ "game-section" ] [ actions ] ]
+  {%html.jsx|
+    <div *{[ Style.game_board ]}>
+      <div *{[ Style.game_section ]}>%{missions}</div>
+      <div *{[ Style.game_section ]}>%{participants}</div>
+      <div *{[ Style.game_section ]}>%{actions}</div>
+    </div>
+  |}
 ;;
 
 (* ============================ Toolbar ============================ *)
 let view_role_button (local_ graph) =
   let%arr m = State.value () in
   let sheet = m.show_role_sheet in
-  let activator = btn ~cls:[ "outlined" ] ~on_click:(eff (fun () -> State.set_show_role_sheet true)) [ mdi "account"; spanc ~cls:[ "role-btn-text" ] [ N.text (D.user_name m) ] ] in
+  let activator = btn ~attrs:[ Style.outlined ] ~on_click:(eff (fun () -> State.set_show_role_sheet true)) [ mdi "account"; N.span [ N.text (D.user_name m) ] ] in
   let sheet_node =
     if not sheet
     then N.none
     else (
       let body =
         if not (D.is_game_in_progress m)
-        then card ~cls:[ "sheet" ] [ card_title [ N.div ~attrs:[ A.class_ "fw center" ] [ N.text "When the game starts, you will see your role here." ] ]; card_text [ div ~cls:[ "col"; "center" ] [ N.p [ N.text "Your Stats" ]; stats_display (Option.bind m.user ~f:(fun u -> u.stats)) m.global_stats ] ] ]
+        then
+          card ~attrs:[ Style.sheet ]
+            [ card_title [ {%html.jsx|<div *{[ Style.fw; Style.center ]}>When the game starts, you will see your role here.</div>|} ]
+            ; card_text [ div ~attrs:[ Style.col; Style.center ] [ N.p [ N.text "Your Stats" ]; stats_display (Option.bind m.user ~f:(fun u -> u.stats)) m.global_stats ] ]
+            ]
         else (
           match D.role m with
           | None -> N.none
           | Some rd ->
-            card ~cls:[ "sheet" ]
-              [ card_title ~cls:[ "title-bar" ] [ team_icon rd.role.team; spanc ~cls:[ "text-h5" ] [ N.text rd.role.name ] ]
+            card ~attrs:[ Style.sheet ]
+              [ card_title ~attrs:[ Style.title_bar ] [ team_icon rd.role.team; spanc ~attrs:[ Style.text_h5 ] [ N.text rd.role.name ] ]
               ; card_text
                   [ N.p [ textf "Your role is %s." rd.role.name ]
                   ; N.p [ textf "You are on the %s team." (team_to_string rd.role.team) ]
@@ -816,9 +892,13 @@ let view_role_button (local_ graph) =
                   ]
               ])
       in
-      N.div ~attrs:[ A.class_ "bottom-sheet-overlay"; A.on_click (fun _ -> eff (fun () -> State.set_show_role_sheet false)) ] [ N.div ~attrs:[ A.class_ "bottom-sheet"; A.on_click (fun _ -> Effect.Many []) ] [ body ] ])
+      {%html.jsx|
+        <div *{[ Style.bottom_sheet_overlay ]} on_click=%{fun _ -> eff (fun () -> State.set_show_role_sheet false)}>
+          <div class="bottom-sheet" on_click=%{fun _ -> Effect.Many []}>%{body}</div>
+        </div>
+      |})
   in
-  N.div [ activator; sheet_node ]
+  {%html.jsx|<div>%{activator}%{sheet_node}</div>|}
 ;;
 
 let quit_button (local_ graph) =
@@ -827,16 +907,18 @@ let quit_button (local_ graph) =
   let in_game = D.is_game_in_progress m in
   let action_desc = if in_game then "Cancel Game" else "Leave Lobby" in
   let confirm = eff (fun () -> run (set_dialog false); if in_game then State.cancel_game () else State.leave_lobby ()) in
-  N.div
-    [ btn ~cls:[ "quit-btn" ] ~on_click:(set_dialog true) [ mdi "exit-to-app"; spanc ~cls:[ "quit-btn-text" ] [ N.text "Quit" ] ]
-    ; (if not dialog then N.none
-       else
-         overlay ~on_close:(set_dialog false)
-           [ card_title ~cls:[ "title-bar" ] [ N.h3 [ textf "%s?" action_desc ] ]
-           ; card_text [ N.text ((if in_game then "The current game will be canceled! " else "") ^ "Are you sure you want to proceed?") ]
-           ; div ~cls:[ "row"; "actions" ] [ btn ~on_click:confirm [ N.text action_desc ]; btn ~on_click:(set_dialog false) [ N.text "Nevermind" ] ]
-           ])
-    ]
+  let activator = btn ~on_click:(set_dialog true) [ mdi "exit-to-app"; N.span [ N.text "Quit" ] ] in
+  let dialog_node =
+    if not dialog
+    then N.none
+    else
+      overlay ~on_close:(set_dialog false)
+        [ card_title ~attrs:[ Style.title_bar ] [ N.h3 [ textf "%s?" action_desc ] ]
+        ; card_text [ N.text ((if in_game then "The current game will be canceled! " else "") ^ "Are you sure you want to proceed?") ]
+        ; div ~attrs:[ Style.row; Style.actions ] [ btn ~on_click:confirm [ N.text action_desc ]; btn ~on_click:(set_dialog false) [ N.text "Nevermind" ] ]
+        ]
+  in
+  {%html.jsx|<div>%{activator}%{dialog_node}</div>|}
 ;;
 
 let game_toolbar (local_ graph) =
@@ -845,19 +927,26 @@ let game_toolbar (local_ graph) =
   let%arr m = State.value () and view_role = view_role and quit = quit in
   let lobby_named = match m.lobby with Some l -> not (String.is_empty l.name) | None -> false in
   if lobby_named && Option.is_some m.user
-  then
-    N.div ~attrs:[ A.class_ "toolbar" ]
-      [ div ~cls:[ "row"; "center-v" ] [ mdi "map-marker"; spanc ~cls:[ "fw"; "lobby-name" ] [ N.text (Option.value_map m.lobby ~default:"" ~f:(fun l -> l.name)) ] ]
-      ; div ~cls:[ "spacer" ] []
-      ; view_role
-      ; quit
-      ]
-  else
-    N.div ~attrs:[ A.class_ "toolbar" ]
-      [ spanc ~cls:[ "toolbar-email" ] [ N.text (Option.value (Option.bind m.user ~f:(fun u -> u.email)) ~default:"") ]
-      ; div ~cls:[ "spacer" ] []
-      ; btn ~on_click:(eff State.logout) [ mdi "exit-to-app"; N.text "Logout" ]
-      ]
+  then (
+    let lobby_label = Option.value_map m.lobby ~default:"" ~f:(fun l -> l.name) in
+    {%html.jsx|
+      <div *{[ Style.toolbar ]}>
+        <div *{[ Style.row; Style.center_v ]}>%{mdi "map-marker"}<span *{[ A.class_ "lobby-name"; Style.fw ]}>#{lobby_label}</span></div>
+        <div *{[ Style.spacer ]}></div>
+        %{view_role}
+        %{quit}
+      </div>
+    |})
+  else (
+    let email = Option.value (Option.bind m.user ~f:(fun u -> u.email)) ~default:"" in
+    let logout = btn ~on_click:(eff State.logout) [ mdi "exit-to-app"; N.text "Logout" ] in
+    {%html.jsx|
+      <div *{[ Style.toolbar ]}>
+        <span *{[ Style.toolbar_email ]}>#{email}</span>
+        <div *{[ Style.spacer ]}></div>
+        %{logout}
+      </div>
+    |})
 ;;
 
 (* ============================ Event modals ============================ *)
@@ -867,23 +956,24 @@ let modals (local_ graph) =
   match m.modal, D.game m with
   | M.Start_game, _ ->
     overlay ~on_close:Effect.(return ())
-      [ card_title ~cls:[ "title-bar" ] [ N.h3 [ N.text "Game Started" ] ]
+      [ card_title ~attrs:[ Style.title_bar ] [ N.h3 [ N.text "Game Started" ] ]
       ; card_text [ N.p [ N.text "A new game has started. When you are ready, view your secret role." ]; N.p [ N.text "You may also view your role anytime by clicking on your name in the toolbar." ] ]
-      ; div ~cls:[ "row"; "actions" ] [ btn ~on_click:(eff (fun () -> State.set_modal No_modal; State.set_show_role_sheet true)) [ N.text "View Role" ] ]
+      ; div ~attrs:[ Style.row; Style.actions ] [ btn ~on_click:(eff (fun () -> State.set_modal No_modal; State.set_show_role_sheet true)) [ N.text "View Role" ] ]
       ]
   | M.Mission_result, Some g ->
     let idx = if g.current_mission_idx < 0 then List.length (Game.missions g) else g.current_mission_idx in
     (match List.nth (Game.missions g) (idx - 1) with
      | None -> N.none
      | Some mission ->
+       let title =
+         match mission.state with
+         | Success -> N.div [ fa ~color:"green" "fas" "fa-check-circle"; N.text " Mission Succeeded!" ]
+         | _ -> N.div [ fa ~color:"red" "fas" "fa-times-circle"; N.text " Mission Failed!" ]
+       in
        overlay ~on_close:close
-         [ card_title ~cls:[ "title-bar" ]
-             [ (match mission.state with
-                | Success -> N.div [ fa ~color:"green" "fas" "fa-check-circle"; N.text " Mission Succeeded!" ]
-                | _ -> N.div [ fa ~color:"red" "fas" "fa-times-circle"; N.text " Mission Failed!" ])
-             ]
+         [ card_title ~attrs:[ Style.title_bar ] [ title ]
          ; card_text [ textf "%s had %s failure %s" (Util.join_with_and mission.team) (if mission.num_fails > 0 then Int.to_string mission.num_fails else "no") (if mission.num_fails = 1 then "vote." else "votes.") ]
-         ; div ~cls:[ "row"; "actions" ] [ btn ~on_click:close [ N.text "Close" ] ]
+         ; div ~attrs:[ Style.row; Style.actions ] [ btn ~on_click:close [ N.text "Close" ] ]
          ])
   | M.End_game, Some g ->
     (match Game.outcome g with
@@ -892,20 +982,22 @@ let modals (local_ graph) =
        let title = match o.state with Good_win -> "Good wins!" | Evil_win -> "Evil wins!" | Canceled -> "Game Canceled" in
        let role_assignments = List.sort o.roles ~compare:(fun a b -> Int.compare (Avalonlib.role_index a.role) (Avalonlib.role_index b.role)) in
        let missions = List.filter (Game.missions g) ~f:(fun mi -> List.exists mi.proposals ~f:(fun p -> not (equal_proposal_state p.state Pending))) in
+       let assassinated =
+         match o.assassinated with
+         | Some a -> N.p [ textf "%s was assassinated by %s" a (Option.value_map (List.find o.roles ~f:(fun r -> r.assassin)) ~default:"" ~f:(fun r -> r.name)) ]
+         | None -> N.none
+       in
+       let body =
+         div ~attrs:[ Style.col; Style.center ]
+           [ {%html.jsx|<div *{[ Style.endgame_message; Style.fw ]}>#{o.message}</div>|}
+           ; assassinated
+           ; div ~attrs:[ Style.endgame_table_wrap ] [ mission_summary_table ~players:(Game.players g) ~missions ~roles:(Some role_assignments) ~mission_votes:(Some o.votes) ]
+           ; achievements g
+           ; btn ~attrs:[ Style.mt_6; Style.primary ] ~on_click:close [ N.text "Close" ]
+           ]
+       in
        overlay ~fullscreen:true ~on_close:close
-         [ card_title ~cls:[ "endgame-title" ] [ spanc ~cls:[ "text-h4"; "fw" ] [ N.text title ] ]
-         ; card_text
-             [ div ~cls:[ "col"; "center" ]
-                 [ N.div ~attrs:[ A.class_ "endgame-message fw" ] [ N.text o.message ]
-                 ; (match o.assassinated with
-                    | Some a -> N.p [ textf "%s was assassinated by %s" a (Option.value_map (List.find o.roles ~f:(fun r -> r.assassin)) ~default:"" ~f:(fun r -> r.name)) ]
-                    | None -> N.none)
-                 ; div ~cls:[ "endgame-table-wrap" ] [ mission_summary_table ~players:(Game.players g) ~missions ~roles:(Some role_assignments) ~mission_votes:(Some o.votes) ]
-                 ; achievements g
-                 ; btn ~cls:[ "mt-6"; "primary" ] ~on_click:close [ N.text "Close" ]
-                 ]
-             ]
-         ])
+         [ card_title ~attrs:[ Style.endgame_title ] [ spanc ~attrs:[ Style.text_h4; Style.fw ] [ N.text title ] ]; card_text [ body ] ])
   | _ -> N.none
 ;;
 
@@ -920,17 +1012,14 @@ let app (local_ graph) =
   let%arr m = State.value () and login = login and lobby_sel = lobby_sel and lobby = lobby and board = board and toolbar = toolbar and modals = modals in
   let content =
     if not (D.initialized m)
-    then div ~cls:[ "container"; "center"; "fill" ] [ N.div ~attrs:[ A.class_ "spinner-lg" ] [] ]
+    then div ~attrs:[ Style.container; Style.center; Style.fill ] [ {%html.jsx|<div *{[ Style.spinner_lg ]}></div>|} ]
     else if not (D.is_logged_in m)
-    then div ~cls:[ "container"; "center" ] [ login ]
-    else
-      N.div
-        [ toolbar
-        ; div ~cls:[ "container" ]
-            [ (if not (D.is_in_lobby m) then lobby_sel else if not (D.is_game_in_progress m) then lobby else board) ]
-        ]
+    then div ~attrs:[ Style.container; Style.center ] [ login ]
+    else (
+      let main = if not (D.is_in_lobby m) then lobby_sel else if not (D.is_game_in_progress m) then lobby else board in
+      {%html.jsx|<div>%{toolbar}<div *{[ Style.container ]}>%{main}</div></div>|})
   in
-  N.div ~attrs:[ A.class_ "app bg-indigo" ] [ modals; content ]
+  {%html.jsx|<div *{[ Style.app ]}>%{modals}%{content}</div>|}
 ;;
 
 let run_app () =

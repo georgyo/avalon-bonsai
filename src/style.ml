@@ -85,10 +85,10 @@ include
   .tab { flex: 1; background: #b3e5fc; border-radius: 0; box-shadow: none; }
   .tab_active { background: #4fc3f7; font-weight: 600; }
 
-  /* lists */
-  .list { list-style: none; margin: 0; padding: 4px; background: #cfd8dc; border-radius: 6px; }
-  .list_item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-  .list_item:last-child { border-bottom: none; }
+  /* lists ([v-list]/[v-list-item] kept global so the e2e suite + DOM queries can select them) */
+  :global(.v-list) { list-style: none; margin: 0; padding: 4px; background: #cfd8dc; border-radius: 6px; }
+  :global(.v-list-item) { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  :global(.v-list-item):last-child { border-bottom: none; }
   .li_prepend { display: flex; align-items: center; gap: 6px; min-width: 28px; }
   .li_mid { width: 36px; display: flex; align-items: center; justify-content: center; }
   .li_title { flex: 1 1 auto; }
@@ -115,13 +115,14 @@ include
 
   /* toolbar */
   .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e88e5; color: #e0f7fa; }
-  .lobby_name { font-weight: 700; }
+  :global(.lobby-name) { font-weight: 700; }
   .toolbar_email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
   .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* game board */
   .game_board { width: 100%; }
   .game_section { padding: 8px 0; }
+  .action { width: 100%; }
   .action_title { background: #b3e5fc; }
   .mission_panel { margin-top: 4px; }
   .bg_fail { background: #ffcdd2; }
@@ -157,9 +158,10 @@ include
   .endgame_table_wrap { overflow-x: auto; width: 100%; }
   .achievement { max-width: 900px; }
 
-  /* bottom sheet (view role) */
+  /* bottom sheet (view role); [.bottom-sheet] kept global so the e2e suite can read the role text */
   .bottom_sheet_overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: flex-end; }
-  .bottom_sheet { width: 100%; background: #e0f7fa; border-radius: 12px 12px 0 0; max-height: 80vh; overflow: auto; }
+  :global(.bottom-sheet) { width: 100%; background: #e0f7fa; border-radius: 12px 12px 0 0; max-height: 80vh; overflow: auto; }
+  .sheet { border-radius: 0; box-shadow: none; margin: 0; }
 
   /* spinners */
   .spinner { display: inline-block; border: 3px solid rgba(0,0,0,0.2); border-top-color: #3949ab; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.8s linear infinite; }
