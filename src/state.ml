@@ -203,8 +203,7 @@ let lobby_doc_updated snap =
           then m
           else update_roles ~roles:new_data.game.roles m
         in
-        Ffi.set_document_title
-          (sprintf "Avalon - %s - %s" new_data.name (Derived.user_name m));
+        Ffi.set_document_title (sprintf "Avalon - %s - %s" lob.name (Derived.user_name m));
         m
       in
       let final =
@@ -345,9 +344,9 @@ let on_auth_state_changed user =
      | None -> ());
     update ~f:(fun m -> { m with user = None }))
   else (
-    (match Ffi.field_string_opt user "email" with
-     | Some e -> Api.login e
-     | None -> ());
+    (* Call login unconditionally (even for anonymous users with no email) so the server
+       creates the user doc; otherwise createLobby fails with "No such user". *)
+    Api.login (Ffi.field_string_opt user "email");
     let unsub =
       Ffi.on_snapshot
         (Ffi.doc [ "users"; Ffi.field_string user "uid" ])

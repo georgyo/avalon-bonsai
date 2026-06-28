@@ -69,6 +69,7 @@ let obj (fields : (string * any) list) : any =
   Js.Unsafe.obj (List.map fields ~f:(fun (k, v) -> k, v) |> Array.of_list)
 ;;
 
+let null_value : any = Js.Unsafe.inject Js.null
 let of_string s : any = inject (str s)
 let of_bool b : any = inject (Js.bool b)
 let of_int i : any = inject (Js.number_of_float (Int.to_float i))

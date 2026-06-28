@@ -67,8 +67,9 @@ let post
 let ignore_ok _ = ()
 let ignore_err _ = ()
 
-let login ?(on_ok = ignore_ok) ?(on_err = ignore_err) email =
-  post ~endpoint:"login" ~data:[ "email", Ffi.of_string email ] ~on_ok ~on_err
+let login ?(on_ok = ignore_ok) ?(on_err = ignore_err) (email : string option) =
+  let email_value = match email with Some e -> Ffi.of_string e | None -> Ffi.null_value in
+  post ~endpoint:"login" ~data:[ "email", email_value ] ~on_ok ~on_err
 ;;
 
 let join_lobby ~on_ok ~on_err ~name ~lobby =
