@@ -550,8 +550,35 @@ let game_participants ~selected ~set_selected (local_ graph) =
 ;;
 
 (* ============================ Action panes ============================ *)
+
+(* Fire [reset] whenever the active (mission, proposal) changes, to clear optimistic
+   per-proposal local state. match%sub does not reset inactive-branch state in this Bonsai
+   version, so without this a vote/proposal on one round leaks into the next. *)
+let on_proposal_change (local_ graph) ~reset =
+  let key =
+    let%arr m = State.value () in
+    match D.game m with
+    | Some g -> g.current_mission_idx, g.current_proposal_idx
+    | None -> -1, -1
+  in
+  Bonsai.Edge.on_change
+    key
+    ~equal:[%equal: int * int]
+    ~callback:
+      (let%arr reset = reset in
+       fun _ -> reset)
+    graph
+;;
+
 let team_proposal_action ~selected (local_ graph) =
   let proposing, set_proposing = Bonsai.state false graph in
+  let () =
+    on_proposal_change
+      graph
+      ~reset:
+        (let%arr set_proposing = set_proposing in
+         set_proposing false)
+  in
   let%arr m = State.value () and selected = selected and proposing = proposing and set_proposing = set_proposing in
   match D.game m with
   | None -> N.none
@@ -572,6 +599,13 @@ let team_proposal_action ~selected (local_ graph) =
 
 let team_vote_action (local_ graph) =
   let voted, set_voted = Bonsai.state_opt graph ~sexp_of_model:[%sexp_of: bool] in
+  let () =
+    on_proposal_change
+      graph
+      ~reset:
+        (let%arr set_voted = set_voted in
+         set_voted None)
+  in
   let%arr m = State.value () and voted = voted and set_voted = set_voted in
   match D.game m with
   | None -> N.none
