@@ -3,6 +3,12 @@
 Playwright-driven multiplayer tests that exercise the full game against the **live**
 backend (Firebase + the `https://avalon.onl/api` REST server).
 
+> For fast, offline, CI-friendly coverage of the pure game logic (role sizing, game-state
+> derivation, the achievement/badge engine) see the native unit tests in `test/` — run
+> `dune runtest`. Those need no network. The Playwright tests below are integration tests
+> and DO hit the live backend (the REST server holds the actual game rules, so they can't
+> run fully offline without reimplementing it).
+
 ## Files
 
 - `serve.cjs` — serves `_build/default/bin` and reverse-proxies `/api` → `https://avalon.onl/api`
