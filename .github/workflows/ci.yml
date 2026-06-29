@@ -1,0 +1,55 @@
+name: CI
+
+# Builds the client and runs the avalon_core unit tests on every push / PR.
+#
+# NOTE: this project needs the OxCaml toolchain (a custom `5.2.0+ox` compiler plus Jane
+# Street libraries from github.com/oxcaml/opam-repository). Building that compiler from
+# source is slow (tens of minutes) on a cold cache, so the entire opam root is cached and
+# the heavy `opam switch create` / `opam install` only runs on a cache miss. The first run
+# on a new cache key will therefore be slow; subsequent runs restore the switch and are fast.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install opam
+        run: sudo apt-get update && sudo apt-get install -y opam bubblewrap
+
+      - name: Cache opam root (compiler + libraries)
+        id: cache-opam
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          # Bump the suffix to force a clean toolchain rebuild.
+          key: opam-ox-5.2.0-${{ runner.os }}-v1
+
+      - name: Provision the OxCaml switch
+        if: steps.cache-opam.outputs.cache-hit != 'true'
+        run: |
+          opam init --bare --disable-sandboxing -y
+          # Same repo set the local 5.2.0+ox switch uses.
+          opam switch create 5.2.0+ox ocaml-variants.5.2.0+ox \
+            --repos ox-dev=git+https://github.com/oxcaml/opam-repository.git#dev,ox=git+https://github.com/oxcaml/opam-repository.git,default=https://opam.ocaml.org \
+            -y
+          eval $(opam env --switch=5.2.0+ox)
+          # bonsai_web pulls bonsai / virtual_dom / ppx_bonsai / js_of_ocaml; the rest are
+          # the ppxes and the jsoo toolchain this repo uses directly.
+          opam install -y dune bonsai_web ppx_css ppx_html \
+            js_of_ocaml js_of_ocaml-ppx js_of_ocaml-compiler ppx_jane ppx_inline_test
+
+      - name: Build
+        run: |
+          eval $(opam env --switch=5.2.0+ox)
+          dune build
+
+      - name: Test
+        run: |
+          eval $(opam env --switch=5.2.0+ox)
+          dune runtest

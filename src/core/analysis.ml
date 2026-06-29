@@ -26,7 +26,6 @@ type t =
   ; missions : mission_ex list
   }
 
-let seq_eq a b = List.mem a b ~equal:String.equal
 let str_eq = String.equal
 let mem l x = List.mem l x ~equal:String.equal
 
@@ -897,5 +896,3 @@ let all_badges : (t -> badge option) list =
 ;;
 
 let get_badges (t : t) : badge list = List.filter_map all_badges ~f:(fun f -> f t)
-
-let _ = seq_eq

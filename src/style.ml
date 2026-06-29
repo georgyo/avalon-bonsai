@@ -29,7 +29,6 @@ include
   .spacer { flex: 1 1 auto; }
   .ga_2 { gap: 8px; }
   .pt_2 { padding-top: 8px; }
-  .pt_4 { padding-top: 16px; }
   .pt_6 { padding-top: 24px; }
   .pt_8 { padding-top: 32px; }
   .mt_4 { margin-top: 16px; }
@@ -109,7 +108,6 @@ include
   /* toolbar */
   .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e88e5; color: #e0f7fa; }
   .toolbar_email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
-  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* game board */
   .game_board { width: 100%; }
