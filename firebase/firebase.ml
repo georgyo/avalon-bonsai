@@ -166,7 +166,7 @@ let firebasejs_base = "https://www.gstatic.com/firebasejs/12.3.0/"
 (* Load the three modular entry points in parallel via runtime dynamic [import()] and merge
    their named exports into one object (Object.assign over the module namespaces), then run
    [f]. Repeat calls reuse the already-loaded exports. *)
-let on_ready (f : unit -> unit) : unit =
+let on_ready ?(on_error = fun () -> ()) (f : unit -> unit) : unit =
   match !exports_ref with
   | Some _ -> f ()
   | None ->
@@ -190,5 +190,6 @@ let on_ready (f : unit -> unit) : unit =
           (Js.Unsafe.fun_call
              (Js.Unsafe.js_expr "(function(e){console.error('Failed to load Firebase SDK',e);})")
              [| inject e |]
-            : any))
+            : any);
+        on_error ())
 ;;

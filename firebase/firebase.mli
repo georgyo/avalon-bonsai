@@ -37,8 +37,10 @@ type action_code_settings =
   ; handle_code_in_app : bool
   }
 
-(** Run [f] once the modular SDK shim is available (immediately if already loaded). *)
-val on_ready : (unit -> unit) -> unit
+(** Run [f] once the modular SDK is loaded (immediately if already loaded). [on_error] runs
+    if the dynamic import fails (e.g. the CDN is blocked or offline) so the caller can show a
+    recoverable error instead of hanging. *)
+val on_ready : ?on_error:(unit -> unit) -> (unit -> unit) -> unit
 
 (** [initializeApp] the default app. Must run before any other call; do it in {!on_ready}. *)
 val init : config -> unit

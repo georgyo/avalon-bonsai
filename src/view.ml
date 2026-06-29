@@ -1012,6 +1012,17 @@ let app (local_ graph) =
   let modals = modals graph in
   let%arr m = State.value () and login = login and lobby_sel = lobby_sel and lobby = lobby and board = board and toolbar = toolbar and modals = modals in
   let content =
+    match m.connection_error with
+    | Some msg ->
+      div
+        ~attrs:[ Style.container; Style.center; Style.fill ]
+        [ card ~attrs:[ Style.welcome ]
+            [ card_title [ N.text "Connection problem" ]
+            ; card_text [ N.text msg ]
+            ; div ~attrs:[ Style.actions ] [ btn ~on_click:(eff (fun () -> Ffi.reload_page ())) [ N.text "Reload" ] ]
+            ]
+        ]
+    | None ->
     if not (D.initialized m)
     then div ~attrs:[ Style.container; Style.center; Style.fill ] [ {%html.jsx|<div *{[ Style.spinner_lg ]}></div>|} ]
     else if not (D.is_logged_in m)

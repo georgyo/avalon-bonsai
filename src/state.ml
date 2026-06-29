@@ -37,6 +37,7 @@ module Model = struct
 
   type t =
     { auth_initialized : bool
+    ; connection_error : string option
     ; confirming_email_error : string option
     ; user : user_data option
     ; lobby : lobby option
@@ -55,6 +56,7 @@ module Model = struct
 
   let initial =
     { auth_initialized = false
+    ; connection_error = None
     ; confirming_email_error = None
     ; user = None
     ; lobby = None
@@ -174,9 +176,7 @@ let unsubscribe_from_lobby () =
 ;;
 
 let role_doc_updated snap =
-  let rd =
-    if Firebase.exists snap then Parse.role_doc (Option.value_exn (Firebase.data snap)) else None
-  in
+  let rd = match Firebase.data snap with Some d -> Parse.role_doc d | None -> None in
   update_lobby ~f:(fun l -> { l with role = rd })
 ;;
 
@@ -185,10 +185,10 @@ let lobby_doc_updated snap =
   match m.lobby with
   | None -> ()
   | Some lob ->
-    if not (Firebase.exists snap)
-    then unsubscribe_from_lobby ()
-    else (
-      let new_data = Parse.lobby_data (Option.value_exn (Firebase.data snap)) in
+    (match Firebase.data snap with
+     | None -> unsubscribe_from_lobby () (* lobby deleted *)
+     | Some snap_data ->
+      let new_data = Parse.lobby_data snap_data in
       let game = Game.create new_data.game ~role_map:Avalonlib.role_map in
       let old_data = lob.data in
       let base =
@@ -275,7 +275,10 @@ let subscribe_to_lobby name =
     let uid = Option.value_map m.user ~default:"" ~f:(fun u -> u.uid) in
     set { m with lobby = Some { name; connected = false; data = None; role = None; game = None } };
     let u1 =
-      Firebase.on_snapshot (Firebase.doc [ "lobbies"; name ]) ~on_next:lobby_doc_updated ~on_error:(fun _ -> ())
+      Firebase.on_snapshot
+        (Firebase.doc [ "lobbies"; name ])
+        ~on_next:lobby_doc_updated
+        ~on_error:(fun _ -> Toast.show "Lost connection to the lobby. Try reloading.")
     in
     let u2 =
       Firebase.on_snapshot
@@ -287,20 +290,25 @@ let subscribe_to_lobby name =
 ;;
 
 (* ---- user doc + auth ---- *)
+
+(* A minimal user_data built straight from the auth record, used before/instead of the
+   Firestore user doc (e.g. the doc doesn't exist yet, or its listener errored). *)
+let synthetic_user () : user_data option =
+  Option.map (Firebase.current_user ()) ~f:(fun au ->
+    { uid = Firebase.uid au
+    ; name = Option.value (Firebase.display_name au) ~default:"Anonymous"
+    ; email = Firebase.email au
+    ; lobby = None
+    ; stats = None
+    })
+;;
+
 let user_doc_updated snap =
   update ~f:(fun m -> { m with auth_initialized = true });
-  if not (Firebase.exists snap)
-  then (
-    match Firebase.current_user () with
-    | None -> ()
-    | Some au ->
-      let uid = Firebase.uid au in
-      let name = Option.value (Firebase.display_name au) ~default:"Anonymous" in
-      let email = Firebase.email au in
-      update ~f:(fun m ->
-        { m with user = Some { uid; name; email; lobby = None; stats = None } }))
-  else (
-    let u = Parse.user_data (Option.value_exn (Firebase.data snap)) in
+  match Firebase.data snap with
+  | None -> update ~f:(fun m -> { m with user = synthetic_user () })
+  | Some d ->
+    let u = Parse.user_data d in
     update ~f:(fun m -> { m with user = Some u });
     let m = model () in
     match u.lobby, m.lobby with
@@ -309,7 +317,7 @@ let user_doc_updated snap =
       unsubscribe_from_lobby ();
       Toast.show (sprintf "You've been disconnected from %s" old)
     | Some lobby_name, None -> subscribe_to_lobby lobby_name
-    | _ -> ())
+    | _ -> ()
 ;;
 
 let on_auth_state_changed (user : Firebase.user option) =
@@ -340,12 +348,18 @@ let on_auth_state_changed (user : Firebase.user option) =
   | Some user ->
     (* Call login unconditionally (even for anonymous users with no email) so the server
        creates the user doc; otherwise createLobby fails with "No such user". *)
-    Api.login (Firebase.email user);
+    Api.login
+      (Firebase.email user)
+      ~on_err:(fun _ -> Toast.show "Couldn't reach the game server. Some actions may fail — try reloading.");
     let unsub =
       Firebase.on_snapshot
         (Firebase.doc [ "users"; Firebase.uid user ])
         ~on_next:user_doc_updated
-        ~on_error:(fun _ -> ())
+        (* Don't hang on a listener error: fall back to a minimal user from auth so the UI
+           still renders (login -> lobby-select) instead of spinning forever. *)
+        ~on_error:(fun _ ->
+          update ~f:(fun m -> { m with auth_initialized = true; user = synthetic_user () });
+          Toast.show "Couldn't sync your profile. Try reloading.")
     in
     user_doc_unsub := Some unsub;
     Firebase.get_doc
@@ -361,7 +375,16 @@ let on_auth_state_changed (user : Firebase.user option) =
 let init () =
   (* The modular SDK is imported asynchronously (ESM, no bundler), so defer all Firebase
      setup until [on_ready] has dynamically imported it. *)
-  Firebase.on_ready (fun () ->
+  Firebase.on_ready
+    ~on_error:(fun () ->
+      update ~f:(fun m ->
+        { m with
+          connection_error =
+            Some
+              "Couldn't load Firebase. Check your connection or any content/ad blockers, \
+               then reload."
+        }))
+    (fun () ->
     Firebase.init firebase_config;
     if Ffi.url_has_param "purchaseSuccess"
     then Ffi.alert "Thank you. Your support means a lot."
@@ -373,6 +396,10 @@ let init () =
 (* ---- actions invoked by the UI ---- *)
 let noop_ok () = ()
 let noop_err (_ : string) = ()
+
+(* Default error handler for fire-and-observe actions whose callers don't show an inline
+   error: surface the failure as a toast rather than silently dropping it. *)
+let toast_err (msg : string) = Toast.show msg
 
 let create_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name () =
   Api.create_lobby
@@ -394,10 +421,14 @@ let join_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name ~lobby () =
 ;;
 
 let leave_lobby () =
-  Api.leave_lobby ~lobby:(lobby_name ()) ~on_ok:(fun _ -> unsubscribe_from_lobby ()) ()
+  Api.leave_lobby
+    ~lobby:(lobby_name ())
+    ~on_ok:(fun _ -> unsubscribe_from_lobby ())
+    ~on_err:(fun msg -> Toast.show msg)
+    ()
 ;;
 
-let kick_player ?(on_ok = noop_ok) ?(on_err = noop_err) name =
+let kick_player ?(on_ok = noop_ok) ?(on_err = toast_err) name =
   Api.kick_player
     ~lobby:(lobby_name ())
     ~name
@@ -406,7 +437,7 @@ let kick_player ?(on_ok = noop_ok) ?(on_err = noop_err) name =
     ()
 ;;
 
-let cancel_game ?(on_ok = noop_ok) ?(on_err = noop_err) () =
+let cancel_game ?(on_ok = noop_ok) ?(on_err = toast_err) () =
   Api.cancel_game
     ~lobby:(lobby_name ())
     ~name:(user_name_str ())
@@ -415,7 +446,7 @@ let cancel_game ?(on_ok = noop_ok) ?(on_err = noop_err) () =
     ()
 ;;
 
-let vote_team ?(on_ok = noop_ok) ?(on_err = noop_err) vote =
+let vote_team ?(on_ok = noop_ok) ?(on_err = toast_err) vote =
   match cur_game () with
   | None -> ()
   | Some g ->

@@ -25,6 +25,7 @@ module Model : sig
 
   type t =
     { auth_initialized : bool
+    ; connection_error : string option
     ; confirming_email_error : string option
     ; user : user_data option
     ; lobby : lobby option

@@ -42,5 +42,6 @@ val window_href : unit -> string
 val set_document_title : string -> unit
 val replace_state_to_pathname : unit -> unit
 val alert : string -> unit
+val reload_page : unit -> unit
 val url_has_param : string -> bool
 val url_get_param : string -> string option
