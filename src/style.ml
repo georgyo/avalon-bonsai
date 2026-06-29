@@ -97,7 +97,9 @@ include
 
   /* welcome / login */
   .welcome { padding: 30px 24px; text-align: center; background: #e0f7fa; max-width: 600px; margin: 24px auto; }
-  .welcome_heading { font-size: 3rem; font-weight: 400; line-height: 1.3; }
+  /* mobile-first: small heading by default, enlarged on wider screens via @media below */
+  .welcome_heading { font-size: 1.75rem; font-weight: 400; line-height: 1.3; }
+  .quit_text { display: inline; }
   .login_form { width: 100%; max-width: 420px; margin: 0 auto; }
   .lobby_select { display: flex; justify-content: center; padding: 16px; }
   .lobby_inner { width: 100%; max-width: 440px; }
@@ -121,6 +123,8 @@ include
 
   /* FontAwesome layering; .fa-layers itself is global (index.html) */
   .layers_text { font-size: 0.55em; top: 35%; font-weight: 700; }
+  /* small red "needs two fails" dot in the upper-right of a mission icon */
+  .fails_dot { font-size: 0.5em; color: red; left: auto; right: 6%; top: 4%; width: auto; }
 
   /* summary table */
   .summary_table { border-collapse: collapse; }
@@ -154,4 +158,15 @@ include
   /* spinners */
   .spinner { display: inline-block; border: 3px solid rgba(0,0,0,0.2); border-top-color: #3949ab; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.8s linear infinite; }
   .spinner_lg { display: inline-block; border: 8px solid rgba(0,0,0,0.2); border-top-color: yellow; border-radius: 50%; width: 120px; height: 120px; animation: spin 0.8s linear infinite; }
+
+  /* responsive — the Vue app targets desktop and mobile; mirror its breakpoints */
+  @media (min-width: 600px) {
+    .welcome_heading { font-size: 3rem; }
+  }
+  @media (max-width: 599px) {
+    .container { padding: 8px; }
+    .welcome { padding: 20px 12px; }
+    .toolbar_email { max-width: 150px; font-size: 0.85rem; }
+    .quit_text { display: none; }
+  }
 |}]

@@ -74,6 +74,11 @@ let text_field ?(attrs = []) ?(typ = "text") ?(placeholder = "") ?(extra = []) ~
 
 let field_error error = if String.is_empty error then N.none else {%html.jsx|<div *{[ Style.field_error ]}>#{error}</div>|}
 
+(* mailto feedback link, styled as a button (port of the Vue "Email"/"Send feedback" btns) *)
+let feedback_link label =
+  {%html.jsx|<a *{[ Style.btn; Style.mt_4 ]} href="mailto:avalon@shamm.as" target="_blank">%{fa "fas" "fa-envelope-square"} #{label}</a>|}
+;;
+
 (* ============================ StatsDisplay ============================ *)
 let stats_display (stats : stats option) (global : stats option) =
   let s = Option.value stats ~default:empty_stats in
@@ -323,6 +328,7 @@ let user_login (local_ graph) =
           %{tab_button "anonymous" "Anonymous"}
         </div>
         %{if String.equal tab "email" then email_pane else anon_pane}
+        %{feedback_link "Email"}
       </div>
     </div>
   |}
@@ -479,6 +485,7 @@ let game_lobby (local_ graph) =
       %{counts}
       <div *{[ Style.row; Style.center; Style.pt_2 ]}>%{start_area}</div>
       <label *{[ Style.checkbox_row ]}><input *{log_attrs} />#{" In-game log"}</label>
+      <div *{[ Style.col; Style.pt_6 ]}>%{feedback_link "Send feedback"}</div>
     </div>
   |}
 ;;
@@ -509,13 +516,16 @@ let game_missions (local_ graph) =
     let missions = Game.missions g in
     let is_future idx = idx > 0 && (match List.nth missions (idx - 1) with Some prev -> equal_mission_state prev.state M_pending | None -> false) in
     let tab idx (mission : mission) =
-      let icon =
+      let base =
         match mission.state with
         | M_pending ->
-          fa_layers [ fa ~color:(if is_future idx then "gray" else "black") "far" "fa-circle"; spanc ~attrs:[ Style.layers_text ] [ N.text (Int.to_string mission.team_size) ] ]
-        | Fail -> fa ~color:"red" "far" "fa-times-circle"
-        | Success -> fa ~color:"green" "far" "fa-check-circle"
+          [ fa ~color:(if is_future idx then "gray" else "black") "far" "fa-circle"; spanc ~attrs:[ Style.layers_text ] [ N.text (Int.to_string mission.team_size) ] ]
+        | Fail -> [ fa ~color:"red" "far" "fa-times-circle" ]
+        | Success -> [ fa ~color:"green" "far" "fa-check-circle" ]
       in
+      (* A red dot marks a mission that needs two fails (the 4th in 7+ player games). *)
+      let dot = if mission.fails_required > 1 then [ spanc ~attrs:[ Style.fails_dot ] [ fa ~color:"red" "fas" "fa-circle" ] ] else [] in
+      let icon = fa_layers (base @ dot) in
       btn ~attrs:(Style.tab_mission :: (if active = idx then [ Style.tab; Style.tab_active ] else [ Style.tab ])) ~on_click:(set_active idx) [ icon ]
     in
     let panel idx (mission : mission) =
@@ -595,7 +605,20 @@ let game_player_list ~selected ~set_selected (local_ graph) =
              else None)
           ]
       in
-      if List.is_empty icons then N.none else fa_layers icons
+      (* Mirror Vue's tooltipText so the otherwise-cryptic status icons are explained on hover. *)
+      let states =
+        List.filter_opt
+          [ (if was_on_last name then Some "was on the last proposed team" else None)
+          ; (if waiting name then Some "is currently voting on the proposal"
+             else if has_voted name then Some "has submitted a vote for the proposed team"
+             else if approved name then Some "approved the last team"
+             else if rejected name then Some "rejected the last team"
+             else None)
+          ]
+      in
+      if List.is_empty icons
+      then N.none
+      else fa_layers ~attrs:[ A.create "title" (sprintf "%s %s" name (Util.join_with_and states)) ] icons
     in
     let item name =
       let checkbox =
@@ -908,7 +931,7 @@ let quit_button (local_ graph) =
   let in_game = D.is_game_in_progress m in
   let action_desc = if in_game then "Cancel Game" else "Leave Lobby" in
   let confirm = eff (fun () -> run (set_dialog false); if in_game then State.cancel_game () else State.leave_lobby ()) in
-  let activator = btn ~on_click:(set_dialog true) [ mdi "exit-to-app"; N.span [ N.text "Quit" ] ] in
+  let activator = btn ~on_click:(set_dialog true) [ mdi "exit-to-app"; spanc ~attrs:[ Style.quit_text ] [ N.text "Quit" ] ] in
   let dialog_node =
     if not dialog
     then N.none

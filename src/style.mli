@@ -28,6 +28,7 @@ val container : Vdom.Attr.t
 val endgame_message : Vdom.Attr.t
 val endgame_table_wrap : Vdom.Attr.t
 val endgame_title : Vdom.Attr.t
+val fails_dot : Vdom.Attr.t
 val field_error : Vdom.Attr.t
 val fill : Vdom.Attr.t
 val fullscreen : Vdom.Attr.t
@@ -60,6 +61,7 @@ val primary : Vdom.Attr.t
 val pt_2 : Vdom.Attr.t
 val pt_6 : Vdom.Attr.t
 val pt_8 : Vdom.Attr.t
+val quit_text : Vdom.Attr.t
 val role_cell : Vdom.Attr.t
 val row : Vdom.Attr.t
 val sheet : Vdom.Attr.t
