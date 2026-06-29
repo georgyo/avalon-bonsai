@@ -1,34 +1,19 @@
 open! Bonsai_web
 
-(** Scoped, co-located styles via ppx_css. Class accessors are [Style.foo : Vdom.Attr.t]
-    with auto-hashed names; the stylesheet is injected into the page at runtime. Global
-    element rules, the imperative toast classes (see {!Toast}), and the FontAwesome/MDI
-    layering helpers use [:global(...)] so they keep stable names. *)
+(** Scoped, co-located component styles via ppx_css. Class accessors are [Style.foo :
+    Vdom.Attr.t] with auto-hashed names; the stylesheet is injected at runtime. Genuinely
+    global rules (page reset/font, the imperative toast, and the stable [.v-list] /
+    [.lobby-name] / [.bottom-sheet] / [.fa-layers] hooks the e2e and DOM code select on) live
+    as plain CSS in [web/index.html] instead — ppx_css's [:global()] escape emits a literal
+    [:global(...)] selector that browsers drop. *)
 
 include
   [%css
   stylesheet
     {|
-  :global(html), :global(body) { margin: 0; padding: 0; height: 100%; }
-  :global(body) {
-    font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: #1a237e; color: #1a1a1a;
-  }
-  :global(*) { box-sizing: border-box; }
-
-  /* imperative toast (created in toast.ml) */
-  :global(#toast-container) {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; gap: 8px; z-index: 2000; align-items: center;
-  }
-  :global(.toast) {
-    background: #323232; color: #fff; padding: 10px 18px; border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4); font-size: 0.95rem;
-  }
-
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .app { min-height: 100vh; background: #1a237e; }
+  .app { min-height: 100vh; background: #303f9f; }
 
   /* layout helpers */
   .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
@@ -69,9 +54,10 @@ include
   /* buttons */
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    background: #e0e0e0; color: #1a1a1a; border: none; border-radius: 6px;
-    padding: 8px 16px; font-size: 0.95rem; cursor: pointer; text-transform: none;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    background: #e0e0e0; color: rgba(0,0,0,0.87); border: none; border-radius: 4px;
+    padding: 8px 16px; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.03em;
+    font-family: inherit; cursor: pointer; text-transform: none;
+    box-shadow: 0 3px 1px -2px rgba(0,0,0,0.2), 0 2px 2px 0 rgba(0,0,0,0.14), 0 1px 5px 0 rgba(0,0,0,0.12);
   }
   .btn:hover:not(:disabled) { background: #d0d0d0; }
   .btn:disabled { opacity: 0.5; cursor: default; }
@@ -80,33 +66,38 @@ include
   .outlined { background: transparent; border: 1px solid rgba(255,255,255,0.6); color: #fff; }
   .actions { justify-content: flex-end; gap: 8px; padding: 8px 16px; }
 
-  /* tabs */
-  .tabs { display: flex; gap: 2px; }
-  .tab { flex: 1; background: #b3e5fc; border-radius: 0; box-shadow: none; }
-  .tab_active { background: #4fc3f7; font-weight: 600; }
+  /* tabs (Vuetify v-tabs look: text with an active underline indicator) */
+  .tabs { display: flex; gap: 0; justify-content: center; border-bottom: 1px solid rgba(0,0,0,0.12); }
+  .tab {
+    flex: 1; background: transparent; box-shadow: none; border-radius: 0;
+    color: rgba(0,0,0,0.6); padding: 12px 16px; border-bottom: 2px solid transparent;
+  }
+  .tab:hover:not(:disabled) { background: rgba(0,0,0,0.04); }
+  .tab_active { background: transparent; color: #1976d2; border-bottom-color: #1976d2; font-weight: 500; }
+  /* mission tabs keep a light-blue fill (Vuetify bg-light-blue-lighten-4) under the indicator */
+  .tab_mission { background: #b3e5fc; border-radius: 0; }
 
-  /* lists ([v-list]/[v-list-item] kept global so the e2e suite + DOM queries can select them) */
-  :global(.v-list) { list-style: none; margin: 0; padding: 4px; background: #cfd8dc; border-radius: 6px; }
-  :global(.v-list-item) { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-  :global(.v-list-item):last-child { border-bottom: none; }
+  /* list-item internals; the .v-list / .v-list-item rules themselves are global (index.html) */
   .li_prepend { display: flex; align-items: center; gap: 6px; min-width: 28px; }
   .li_mid { width: 36px; display: flex; align-items: center; justify-content: center; }
   .li_title { flex: 1 1 auto; }
   .li_append { min-width: 28px; text-align: right; }
 
-  /* text fields */
+  /* text fields (Vuetify filled variant: grey fill, bottom rule, rounded top) */
   .text_field {
-    width: 100%; padding: 10px 12px; border: 1px solid #90a4ae; border-radius: 6px;
-    font-size: 1rem; background: #fff; margin-bottom: 8px;
+    width: 100%; padding: 12px 12px; border: none; border-bottom: 1px solid rgba(0,0,0,0.42);
+    border-radius: 4px 4px 0 0; font-size: 1rem; font-family: inherit; color: rgba(0,0,0,0.87);
+    background: rgba(0,0,0,0.06); margin-bottom: 8px;
   }
+  .text_field:focus { outline: none; border-bottom: 2px solid #1976d2; background: rgba(0,0,0,0.09); }
   .upper { text-transform: uppercase; }
   .field_error { color: #c62828; font-size: 0.85rem; margin-bottom: 8px; }
   .alert_error { background: #ffcdd2; color: #b71c1c; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
   .checkbox_row { display: flex; align-items: center; gap: 6px; color: #e0f7fa; padding-top: 16px; }
 
   /* welcome / login */
-  .welcome { padding: 24px; text-align: center; background: #e0f7fa; max-width: 520px; margin: 24px auto; }
-  .welcome_heading { font-size: 2rem; font-weight: 400; }
+  .welcome { padding: 30px 24px; text-align: center; background: #e0f7fa; max-width: 600px; margin: 24px auto; }
+  .welcome_heading { font-size: 3rem; font-weight: 400; line-height: 1.3; }
   .login_form { width: 100%; max-width: 420px; margin: 0 auto; }
   .lobby_select { display: flex; justify-content: center; padding: 16px; }
   .lobby_inner { width: 100%; max-width: 440px; }
@@ -115,7 +106,6 @@ include
 
   /* toolbar */
   .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e88e5; color: #e0f7fa; }
-  :global(.lobby-name) { font-weight: 700; }
   .toolbar_email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
   .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -129,9 +119,7 @@ include
   .bg_success { background: #c8e6c9; }
   .bg_pending { background: #cfd8dc; }
 
-  /* FontAwesome layering */
-  :global(.fa-layers) { position: relative; display: inline-block; width: 1.4em; height: 1.4em; vertical-align: middle; }
-  :global(.fa-layers) > * { position: absolute; left: 0; top: 0; width: 100%; text-align: center; }
+  /* FontAwesome layering; .fa-layers itself is global (index.html) */
   .layers_text { font-size: 0.55em; top: 35%; font-weight: 700; }
 
   /* summary table */
@@ -160,7 +148,7 @@ include
 
   /* bottom sheet (view role); [.bottom-sheet] kept global so the e2e suite can read the role text */
   .bottom_sheet_overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: flex-end; }
-  :global(.bottom-sheet) { width: 100%; background: #e0f7fa; border-radius: 12px 12px 0 0; max-height: 80vh; overflow: auto; }
+  /* .bottom-sheet itself is global (index.html) so the e2e suite can read the role text */
   .sheet { border-radius: 0; box-shadow: none; margin: 0; }
 
   /* spinners */

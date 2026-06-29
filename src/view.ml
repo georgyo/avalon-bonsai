@@ -283,7 +283,7 @@ let user_login (local_ graph) =
         ; A.on_input (fun _ s -> set_email s); on_enter submit_email
         ]
       in
-      let login_attrs = Style.btn :: Style.primary :: (if submitting then [ A.disabled' true ] else []) in
+      let login_attrs = Style.btn :: (if submitting then [ A.disabled' true ] else []) in
       let login_label = if submitting then {%html.jsx|<span *{[ Style.spinner ]}></span>|} else N.text "Login" in
       {%html.jsx|
         <div *{[ Style.pa_4; Style.login_form ]}>
@@ -305,7 +305,7 @@ let user_login (local_ graph) =
   let anon_pane =
     {%html.jsx|
       <div *{[ Style.pa_4 ]}>
-        <button *{[ Style.btn; Style.primary ]} on_click=%{fun _ -> anon}>Login</button>
+        <button *{[ Style.btn ]} on_click=%{fun _ -> anon}>Login</button>
         %{field_err}
       </div>
     |}
@@ -516,7 +516,7 @@ let game_missions (local_ graph) =
         | Fail -> fa ~color:"red" "far" "fa-times-circle"
         | Success -> fa ~color:"green" "far" "fa-check-circle"
       in
-      btn ~attrs:(if active = idx then [ Style.tab; Style.tab_active ] else [ Style.tab ]) ~on_click:(set_active idx) [ icon ]
+      btn ~attrs:(Style.tab_mission :: (if active = idx then [ Style.tab; Style.tab_active ] else [ Style.tab ])) ~on_click:(set_active idx) [ icon ]
     in
     let panel idx (mission : mission) =
       let bg = match mission.state with Fail -> Style.bg_fail | Success -> Style.bg_success | M_pending -> Style.bg_pending in

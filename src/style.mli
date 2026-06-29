@@ -73,6 +73,7 @@ val subtitle : Vdom.Attr.t
 val summary_table : Vdom.Attr.t
 val tab : Vdom.Attr.t
 val tab_active : Vdom.Attr.t
+val tab_mission : Vdom.Attr.t
 val tabs : Vdom.Attr.t
 val text_field : Vdom.Attr.t
 val text_h4 : Vdom.Attr.t
