@@ -8,6 +8,8 @@ open Types
     Firebase listeners and UI actions push new snapshots into it. This replaces the Vue
     [AvalonGame] + [LobbySubscription] + [GameConfig] objects and the mitt EventBus. *)
 
+let _ = () (* action cache test *)
+
 let firebase_config : Firebase.config =
   { api_key = "AIzaSyCwhCvO8NbTusBaHmHHnNT7yC0_11UL2RI"
   ; auth_domain = "georgyo-avalon.firebaseapp.com"
