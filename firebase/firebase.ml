@@ -40,10 +40,11 @@ let str = Js.string
 let inject = Js.Unsafe.inject
 
 let is_nullish (v : any) : bool =
-  Js.to_bool
-    (Js.Unsafe.fun_call
-       (Js.Unsafe.js_expr "(function(x){return x===undefined||x===null;})")
-       [| inject v |])
+  (* [Opt.test] is a [!== null] check and [Optdef.test] a [!== undefined] check; combined
+     they are exactly [x === undefined || x === null], with no per-call closure. *)
+  let as_opt : any Js.Opt.t = Obj.magic v in
+  let as_optdef : any Js.Optdef.t = Obj.magic v in
+  not (Js.Opt.test as_opt && Js.Optdef.test as_optdef)
 ;;
 
 let field_string_opt (o : any) (k : string) : string option =
@@ -53,6 +54,16 @@ let field_string_opt (o : any) (k : string) : string option =
 
 let field_string ?(default = "") o k = Option.value (field_string_opt o k) ~default
 let to_opt (v : any) : any option = if is_nullish v then None else Some v
+
+(* [console.error(msg, v)] — this library has no jsoo ppx, so no [##] syntax. *)
+let console_error (msg : string) (v : any) : unit =
+  ignore
+    (Js.Unsafe.meth_call
+       (Js.Unsafe.get Js.Unsafe.global (str "console"))
+       "error"
+       [| inject (str msg); inject v |]
+     : any)
+;;
 
 (* The merged exports of the modular SDK entry points, snapshotted from the embedded
    bundle's [globalThis.__fb] by {!on_ready}; [call] dispatches a free function by name. *)
@@ -69,11 +80,23 @@ let call (name : string) (args : any array) : any =
 ;;
 
 let promise_then (p : any) ~(on_ok : any -> unit) ~(on_err : error -> unit) : unit =
+  (* [on_err] handles rejections of [p] itself. An exception raised *inside* [on_ok] (or
+     [on_err]) rejects the derived promise instead, which would otherwise vanish as an
+     unhandled rejection — chain a [catch] that at least logs it to the console. *)
+  let derived =
+    Js.Unsafe.meth_call
+      p
+      "then"
+      [| inject (Js.wrap_callback on_ok); inject (Js.wrap_callback on_err) |]
+  in
   ignore
     (Js.Unsafe.meth_call
-       p
-       "then"
-       [| inject (Js.wrap_callback on_ok); inject (Js.wrap_callback on_err) |]
+       derived
+       "catch"
+       [| inject
+            (Js.wrap_callback (fun (e : any) ->
+               console_error "Exception in Firebase promise callback:" e))
+       |]
      : any)
 ;;
 
@@ -109,9 +132,10 @@ let firestore () : any = call "getFirestore" [| inject (app ()) |]
 
 let current_user () : user option = to_opt (Js.Unsafe.get (auth ()) (str "currentUser"))
 
-let on_auth_state_changed (cb : user option -> unit) : unit =
+let on_auth_state_changed (cb : user option -> unit) : unit -> unit =
   let wrapped = Js.wrap_callback (fun (u : any) -> cb (to_opt u)) in
-  ignore (call "onAuthStateChanged" [| inject (auth ()); inject wrapped |] : any)
+  let unsub = call "onAuthStateChanged" [| inject (auth ()); inject wrapped |] in
+  fun () -> ignore (Js.Unsafe.fun_call unsub [||] : any)
 ;;
 
 let sign_in_anonymously ~(on_err : error -> unit) : unit =
@@ -155,7 +179,16 @@ let send_sign_in_link_to_email
     ~on_err
 ;;
 
-let sign_out () : unit = ignore (call "signOut" [| inject (auth ()) |] : any)
+let sign_out
+  ?(on_error = fun (e : error) -> console_error "Firebase signOut failed:" e)
+  ()
+  : unit
+  =
+  promise_then
+    (call "signOut" [| inject (auth ()) |])
+    ~on_ok:(fun _ -> ())
+    ~on_err:on_error
+;;
 
 (* ---- user accessors ---- *)
 
@@ -225,7 +258,23 @@ let data (snap : document_snapshot) : any option =
 
 (* ---- error ---- *)
 
-let error_message (e : error) : string = field_string e "message"
+(* A rejection value need not be a FirebaseError — a plain string (or anything else) can
+   be thrown/rejected too, and defaulting to "" would show users empty toasts. Fall back
+   from the [message] field to a [String()] coercion, and finally to a fixed text. *)
+let error_message (e : error) : string =
+  if is_nullish e
+  then "unknown error"
+  else (
+    match field_string_opt e "message" with
+    | Some m -> m
+    | None ->
+      let coerced =
+        Js.Unsafe.fun_call (Js.Unsafe.get Js.Unsafe.global (str "String")) [| inject e |]
+      in
+      let s = Js.to_string (Js.Unsafe.coerce coerced) in
+      if String.is_empty s then "unknown error" else s)
+;;
+
 let error_code (e : error) : string = field_string e "code"
 
 (* ---- readiness ---- *)

@@ -49,7 +49,10 @@ val init : config -> unit
 
 (* ---- auth ---- *)
 val current_user : unit -> user option
-val on_auth_state_changed : (user option -> unit) -> unit
+
+(** Subscribe to auth-state changes; returns the unsubscribe thunk. *)
+val on_auth_state_changed : (user option -> unit) -> unit -> unit
+
 val sign_in_anonymously : on_err:(error -> unit) -> unit
 
 val sign_in_with_email_link
@@ -66,7 +69,9 @@ val send_sign_in_link_to_email
   -> on_err:(error -> unit)
   -> unit
 
-val sign_out : unit -> unit
+(** Sign out. [on_error] runs if the underlying [signOut] promise rejects (default logs
+    the error to the console) — otherwise a failed logout is invisible. *)
+val sign_out : ?on_error:(error -> unit) -> unit -> unit
 
 (* ---- user ---- *)
 val uid : user -> string
@@ -107,5 +112,10 @@ val exists : document_snapshot -> bool
 val data : document_snapshot -> Js.Unsafe.any option
 
 (* ---- error ---- *)
+
+(** The rejection value's [message] field; for non-FirebaseError rejections (e.g. a plain
+    string) falls back to a [String()] coercion, and to ["unknown error"] as a last resort
+    — never the empty string for a non-empty rejection. *)
 val error_message : error -> string
+
 val error_code : error -> string

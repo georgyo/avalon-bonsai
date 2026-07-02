@@ -307,7 +307,6 @@ let subscribe_to_lobby name =
   match m.lobby with
   | Some _ -> ()
   | None ->
-    let uid = Option.value_map m.user ~default:"" ~f:(fun u -> u.uid) in
     set
       { m with
         lobby = Some { name; connected = false; data = None; role = None; game = None }
@@ -325,13 +324,21 @@ let subscribe_to_lobby name =
               connection_error = Some "Lost connection to the lobby. Please reload."
             }))
     in
-    let u2 =
-      Firebase.on_snapshot
-        (Firebase.doc [ "lobbies"; name; "roles"; uid ])
-        ~on_next:role_doc_updated
-        ~on_error:(fun _ -> ())
+    (* The role doc lives at lobbies/<name>/roles/<uid>. With no signed-in user (or an
+       empty uid) there is no such doc, and an empty path segment makes Firestore's [doc]
+       throw synchronously — so only register the role listener when a non-empty uid
+       exists. *)
+    let role_unsubs =
+      match m.user with
+      | Some u when not (String.is_empty u.uid) ->
+        [ Firebase.on_snapshot
+            (Firebase.doc [ "lobbies"; name; "roles"; u.uid ])
+            ~on_next:role_doc_updated
+            ~on_error:(fun _ -> ())
+        ]
+      | Some _ | None -> []
     in
-    lobby_unsubs := [ u1; u2 ]
+    lobby_unsubs := u1 :: role_unsubs
 ;;
 
 (* ---- user doc + auth ---- *)
@@ -450,7 +457,9 @@ let init () =
       then Ffi.alert "Thank you. Your support means a lot."
       else if Ffi.url_has_param "purchaseCanceled"
       then Ffi.alert "Maybe next time?";
-      Firebase.on_auth_state_changed (fun user -> on_auth_state_changed user))
+      ignore
+        (Firebase.on_auth_state_changed (fun user -> on_auth_state_changed user)
+         : unit -> unit))
 ;;
 
 (* ---- actions invoked by the UI ---- *)
@@ -461,12 +470,22 @@ let noop_err (_ : string) = ()
    error: surface the failure as a toast rather than silently dropping it. *)
 let toast_err (msg : string) = Toast.show msg
 
+(* A 2xx response whose body isn't the expected JSON (Api hands us an empty object when
+   the body fails to parse) has no usable "lobby" field; subscribing with the resulting
+   empty string would make the Firestore [doc] call throw. Treat it as an error instead. *)
+let subscribe_from_response json ~on_ok ~on_err =
+  let lobby = Ffi.field_string json "lobby" in
+  if String.is_empty lobby
+  then on_err "Unexpected response from the game server"
+  else (
+    subscribe_to_lobby lobby;
+    on_ok ())
+;;
+
 let create_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name () =
   Api.create_lobby
     ~name
-    ~on_ok:(fun json ->
-      subscribe_to_lobby (Ffi.field_string json "lobby");
-      on_ok ())
+    ~on_ok:(fun json -> subscribe_from_response json ~on_ok ~on_err)
     ~on_err
 ;;
 
@@ -474,9 +493,7 @@ let join_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name ~lobby () =
   Api.join_lobby
     ~name
     ~lobby
-    ~on_ok:(fun json ->
-      subscribe_to_lobby (Ffi.field_string json "lobby");
-      on_ok ())
+    ~on_ok:(fun json -> subscribe_from_response json ~on_ok ~on_err)
     ~on_err
 ;;
 
@@ -568,7 +585,11 @@ let assassinate ?(on_ok = noop_ok) ?(on_err = noop_err) target =
     ()
 ;;
 
-let logout () = Firebase.sign_out ()
+let logout () =
+  Firebase.sign_out
+    ~on_error:(fun e -> Toast.show ("Logout failed: " ^ Firebase.error_message e))
+    ()
+;;
 
 let sign_in_anonymously ?(on_err = noop_err) () =
   Firebase.sign_in_anonymously ~on_err:(fun e -> on_err (Firebase.error_message e))
