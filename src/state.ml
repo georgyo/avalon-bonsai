@@ -173,106 +173,133 @@ let stop_lobby () =
 
 let unsubscribe_from_lobby () =
   stop_lobby ();
-  update ~f:(fun m -> { m with lobby = None })
+  (* Also reset lobby-scoped transient state so a later join starts clean: a surviving
+     [player_list] would make [update_player_list] merge the new lobby's roster against
+     the old lobby's order, and that order is what [start_game] sends as seating. *)
+  update ~f:(fun m ->
+    { m with
+      lobby = None
+    ; player_list = []
+    ; selected_roles = Model.default_selected_roles
+    ; modal = Model.No_modal
+    ; show_role_sheet = false
+    })
+;;
+
+(* Exception barrier for Firebase snapshot/get callbacks: the Parse functions can raise on
+   type-malformed remote data, and an exception escaping into the Firebase observer kills
+   the listener silently. Log it and tell the user instead. *)
+let on_callback_exn exn =
+  Console.console##error (Js.string (Exn.to_string exn));
+  Toast.show "Received malformed data from the server"
 ;;
 
 let role_doc_updated snap =
-  let rd =
-    match Firebase.data snap with
-    | Some d -> Parse.role_doc d
-    | None -> None
-  in
-  update_lobby ~f:(fun l -> { l with role = rd })
+  try
+    let rd =
+      match Firebase.data snap with
+      | Some d -> Parse.role_doc d
+      | None -> None
+    in
+    update_lobby ~f:(fun l -> { l with role = rd })
+  with
+  | exn -> on_callback_exn exn
 ;;
 
 let lobby_doc_updated snap =
-  let m = model () in
-  match m.lobby with
-  | None -> ()
-  | Some lob ->
-    (match Firebase.data snap with
-     | None -> unsubscribe_from_lobby () (* lobby deleted *)
-     | Some snap_data ->
-       let new_data = Parse.lobby_data snap_data in
-       let game = Game.create new_data.game ~role_map:Avalonlib.role_map in
-       let old_data = lob.data in
-       let base =
-         { m with Model.lobby = Some { lob with data = Some new_data; game = Some game } }
-       in
-       let connected_case (m : Model.t) =
-         let m =
+  try
+    let m = model () in
+    match m.lobby with
+    | None -> ()
+    | Some lob ->
+      (match Firebase.data snap with
+       | None -> unsubscribe_from_lobby () (* lobby deleted *)
+       | Some snap_data ->
+         let new_data = Parse.lobby_data snap_data in
+         let game = Game.create new_data.game ~role_map:Avalonlib.role_map in
+         let old_data = lob.data in
+         let base =
            { m with
-             Model.lobby = Option.map m.lobby ~f:(fun l -> { l with connected = true })
+             Model.lobby = Some { lob with data = Some new_data; game = Some game }
            }
          in
-         let m = update_player_list ~users:new_data.users ~notify:false m in
-         let m =
-           if List.is_empty new_data.game.roles
-           then m
-           else update_roles ~roles:new_data.game.roles m
-         in
-         Ffi.set_document_title
-           (sprintf "Avalon - %s - %s" lob.name (Derived.user_name m));
-         m
-       in
-       let final =
-         match old_data with
-         | None -> connected_case base
-         | Some old when not (String.equal old.name new_data.name) -> connected_case base
-         | Some old ->
-           let m = ref base in
-           if not (String.equal old.admin.uid new_data.admin.uid)
-           then (
-             let is_admin =
-               match !m.user with
-               | Some u -> String.equal u.uid new_data.admin.uid
-               | None -> false
-             in
-             Toast.show
-               (if is_admin
-                then "You are now lobby administrator"
-                else sprintf "%s became lobby administrator" new_data.admin.name));
-           let old_keys = List.map old.users ~f:fst in
-           let new_keys = String.Set.of_list (List.map new_data.users ~f:fst) in
-           let users_changed =
-             List.length old.users <> List.length new_data.users
-             || not (List.for_all old_keys ~f:(Set.mem new_keys))
+         let connected_case (m : Model.t) =
+           let m =
+             { m with
+               Model.lobby = Option.map m.lobby ~f:(fun l -> { l with connected = true })
+             }
            in
-           if users_changed
-           then m := update_player_list ~users:new_data.users ~notify:true !m;
-           if not (equal_game_state old.game.state new_data.game.state)
-           then
-             if equal_game_state new_data.game.state Active
+           let m = update_player_list ~users:new_data.users ~notify:false m in
+           let m =
+             if List.is_empty new_data.game.roles
+             then m
+             else update_roles ~roles:new_data.game.roles m
+           in
+           Ffi.set_document_title
+             (sprintf "Avalon - %s - %s" lob.name (Derived.user_name m));
+           m
+         in
+         let final =
+           match old_data with
+           | None -> connected_case base
+           | Some old when not (String.equal old.name new_data.name) ->
+             connected_case base
+           | Some old ->
+             let m = ref base in
+             if not (String.equal old.admin.uid new_data.admin.uid)
              then (
-               m := update_roles ~roles:new_data.game.roles !m;
-               m := { !m with modal = Start_game })
-             else m := { !m with modal = End_game; show_role_sheet = false }
-           else if not (String.equal old.game.phase new_data.game.phase)
-           then (
-             let phase = new_data.game.phase in
-             if String.equal phase "TEAM_PROPOSAL"
+               let is_admin =
+                 match !m.user with
+                 | Some u -> String.equal u.uid new_data.admin.uid
+                 | None -> false
+               in
+               Toast.show
+                 (if is_admin
+                  then "You are now lobby administrator"
+                  else sprintf "%s became lobby administrator" new_data.admin.name));
+             let old_keys = List.map old.users ~f:fst in
+             let new_keys = String.Set.of_list (List.map new_data.users ~f:fst) in
+             let users_changed =
+               List.length old.users <> List.length new_data.users
+               || not (List.for_all old_keys ~f:(Set.mem new_keys))
+             in
+             if users_changed
+             then m := update_player_list ~users:new_data.users ~notify:true !m;
+             if not (equal_game_state old.game.state new_data.game.state)
              then
-               if game.current_proposal_idx > 0
+               if equal_game_state new_data.game.state Active
                then (
-                 match Game.last_proposal game with
-                 | Some p -> Toast.show (sprintf "%s's team rejected" p.proposer)
+                 m := update_roles ~roles:new_data.game.roles !m;
+                 m := { !m with modal = Start_game })
+               else m := { !m with modal = End_game; show_role_sheet = false }
+             else if not (String.equal old.game.phase new_data.game.phase)
+             then (
+               let phase = new_data.game.phase in
+               if String.equal phase "TEAM_PROPOSAL"
+               then
+                 if game.current_proposal_idx > 0
+                 then (
+                   match Game.last_proposal game with
+                   | Some p -> Toast.show (sprintf "%s's team rejected" p.proposer)
+                   | None -> ())
+                 else m := { !m with modal = Mission_result }
+               else if String.equal phase "ASSASSINATION"
+               then m := { !m with modal = Mission_result }
+               else if String.equal phase "MISSION_VOTE"
+               then (
+                 match game.current_proposal with
+                 | Some p -> Toast.show (sprintf "%s's team approved" p.proposer)
                  | None -> ())
-               else m := { !m with modal = Mission_result }
-             else if String.equal phase "ASSASSINATION"
-             then m := { !m with modal = Mission_result }
-             else if String.equal phase "MISSION_VOTE"
-             then (
-               match game.current_proposal with
-               | Some p -> Toast.show (sprintf "%s's team approved" p.proposer)
-               | None -> ())
-             else if String.equal phase "PROPOSAL_VOTE"
-             then (
-               match game.current_proposal with
-               | Some p -> Toast.show (sprintf "%s has proposed a team" p.proposer)
-               | None -> ()));
-           !m
-       in
-       set final)
+               else if String.equal phase "PROPOSAL_VOTE"
+               then (
+                 match game.current_proposal with
+                 | Some p -> Toast.show (sprintf "%s has proposed a team" p.proposer)
+                 | None -> ()));
+             !m
+         in
+         set final)
+  with
+  | exn -> on_callback_exn exn
 ;;
 
 let subscribe_to_lobby name =
@@ -289,7 +316,14 @@ let subscribe_to_lobby name =
       Firebase.on_snapshot
         (Firebase.doc [ "lobbies"; name ])
         ~on_next:lobby_doc_updated
-        ~on_error:(fun _ -> Toast.show "Lost connection to the lobby. Try reloading.")
+          (* Snapshot-listener errors are terminal: the listener will never fire again, so
+             a transient toast would leave a UI that looks live but never updates. Surface
+             the same persistent reload screen as a Firebase-load failure. *)
+        ~on_error:(fun _ ->
+          update ~f:(fun m ->
+            { m with
+              connection_error = Some "Lost connection to the lobby. Please reload."
+            }))
     in
     let u2 =
       Firebase.on_snapshot
@@ -315,20 +349,28 @@ let synthetic_user () : user_data option =
 ;;
 
 let user_doc_updated snap =
-  update ~f:(fun m -> { m with auth_initialized = true });
-  match Firebase.data snap with
-  | None -> update ~f:(fun m -> { m with user = synthetic_user () })
-  | Some d ->
-    let u = Parse.user_data d in
-    update ~f:(fun m -> { m with user = Some u });
-    let m = model () in
-    (match u.lobby, m.lobby with
-     | None, Some lob ->
-       let old = lob.name in
-       unsubscribe_from_lobby ();
-       Toast.show (sprintf "You've been disconnected from %s" old)
-     | Some lobby_name, None -> subscribe_to_lobby lobby_name
-     | _ -> ())
+  try
+    update ~f:(fun m -> { m with auth_initialized = true });
+    match Firebase.data snap with
+    | None -> update ~f:(fun m -> { m with user = synthetic_user () })
+    | Some d ->
+      let u = Parse.user_data d in
+      update ~f:(fun m -> { m with user = Some u });
+      let m = model () in
+      (match u.lobby, m.lobby with
+       | None, Some lob ->
+         let old = lob.name in
+         unsubscribe_from_lobby ();
+         Toast.show (sprintf "You've been disconnected from %s" old)
+       | Some lobby_name, None -> subscribe_to_lobby lobby_name
+       | Some lobby_name, Some lob when not (String.equal lob.name lobby_name) ->
+         (* Another session moved this user to a different lobby: drop the old
+            subscription and follow. *)
+         unsubscribe_from_lobby ();
+         subscribe_to_lobby lobby_name
+       | _ -> ())
+  with
+  | exn -> on_callback_exn exn
 ;;
 
 let on_auth_state_changed (user : Firebase.user option) =
@@ -355,6 +397,10 @@ let on_auth_state_changed (user : Firebase.user option) =
        u ();
        user_doc_unsub := None
      | None -> ());
+    (* Tear down lobby listeners too: they must not keep running unauthenticated, and
+       [subscribe_to_lobby] refuses to resubscribe on a later re-login while [m.lobby] is
+       still [Some]. *)
+    unsubscribe_from_lobby ();
     update ~f:(fun m -> { m with user = None })
   | Some user ->
     (* Call login unconditionally (even for anonymous users with no email) so the server
@@ -376,9 +422,12 @@ let on_auth_state_changed (user : Firebase.user option) =
     Firebase.get_doc
       (Firebase.doc [ "stats"; "global" ])
       ~on_ok:(fun snap ->
-        match Firebase.data snap with
-        | Some d -> update ~f:(fun m -> { m with global_stats = Some (Parse.stats d) })
-        | None -> ())
+        try
+          match Firebase.data snap with
+          | Some d -> update ~f:(fun m -> { m with global_stats = Some (Parse.stats d) })
+          | None -> ()
+        with
+        | exn -> on_callback_exn exn)
       ~on_err:(fun _ -> ());
     Ffi.replace_state_to_pathname ()
 ;;
