@@ -108,9 +108,28 @@ let game_state_of_string = function
   | _ -> Init
 ;;
 
+(* The in-game phase, from server/types.ts: game.phase is one of these four tokens.
+   [Unknown_phase] preserves the raw string for anything unexpected (including the
+   empty/absent phase before a game starts). *)
+type phase =
+  | Team_proposal
+  | Proposal_vote
+  | Mission_vote
+  | Assassination
+  | Unknown_phase of string
+[@@deriving sexp, equal, compare]
+
+let phase_of_string = function
+  | "TEAM_PROPOSAL" -> Team_proposal
+  | "PROPOSAL_VOTE" -> Proposal_vote
+  | "MISSION_VOTE" -> Mission_vote
+  | "ASSASSINATION" -> Assassination
+  | s -> Unknown_phase s
+;;
+
 type game_data =
   { state : game_state
-  ; phase : string
+  ; phase : phase
   ; players : string list
   ; roles : string list
   ; missions : mission list

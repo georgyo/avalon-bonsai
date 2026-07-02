@@ -19,7 +19,7 @@ type t =
 val create : game_data -> role_map:role String.Map.t -> t
 val data : t -> game_data
 val state : t -> game_state
-val phase : t -> string
+val phase : t -> phase
 val players : t -> string list
 val roles : t -> string list
 val missions : t -> mission list

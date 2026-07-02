@@ -22,12 +22,12 @@ let game_board (local_ graph) =
     let%arr m = State.value () in
     match D.game m with
     | Some g -> Game.phase g
-    | None -> ""
+    | None -> Types.Unknown_phase ""
   in
   let () =
     Bonsai.Edge.on_change
       phase
-      ~equal:String.equal
+      ~equal:Types.equal_phase
       ~callback:
         (let%arr set_selected in
          fun _ -> set_selected [])

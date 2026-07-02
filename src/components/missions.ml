@@ -90,8 +90,7 @@ let game_missions (local_ graph) =
       in
       let header =
         let status =
-          if idx = g.current_mission_idx
-             && not (String.equal (Game.phase g) "ASSASSINATION")
+          if idx = g.current_mission_idx && not (equal_phase (Game.phase g) Assassination)
           then "CURRENT"
           else (
             match mission.state with

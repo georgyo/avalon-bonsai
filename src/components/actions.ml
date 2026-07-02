@@ -311,11 +311,11 @@ let action_pane ~selected (local_ graph) =
     | None -> No_action
     | Some g ->
       (match Game.phase g with
-       | "TEAM_PROPOSAL" -> Propose
-       | "PROPOSAL_VOTE" -> Vote
-       | "MISSION_VOTE" -> Mission
-       | "ASSASSINATION" -> Assassinate
-       | _ -> No_action)
+       | Team_proposal -> Propose
+       | Proposal_vote -> Vote
+       | Mission_vote -> Mission
+       | Assassination -> Assassinate
+       | Unknown_phase _ -> No_action)
   in
   match%sub kind with
   | Propose -> team_proposal_action ~selected graph

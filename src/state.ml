@@ -272,29 +272,26 @@ let lobby_doc_updated snap =
                  m := update_roles ~roles:new_data.game.roles !m;
                  m := { !m with modal = Start_game })
                else m := { !m with modal = End_game; show_role_sheet = false }
-             else if not (String.equal old.game.phase new_data.game.phase)
+             else if not (equal_phase old.game.phase new_data.game.phase)
              then (
-               let phase = new_data.game.phase in
-               if String.equal phase "TEAM_PROPOSAL"
-               then
+               match new_data.game.phase with
+               | Team_proposal ->
                  if game.current_proposal_idx > 0
                  then (
                    match Game.last_proposal game with
                    | Some p -> Toast.show (sprintf "%s's team rejected" p.proposer)
                    | None -> ())
                  else m := { !m with modal = Mission_result }
-               else if String.equal phase "ASSASSINATION"
-               then m := { !m with modal = Mission_result }
-               else if String.equal phase "MISSION_VOTE"
-               then (
-                 match game.current_proposal with
-                 | Some p -> Toast.show (sprintf "%s's team approved" p.proposer)
-                 | None -> ())
-               else if String.equal phase "PROPOSAL_VOTE"
-               then (
-                 match game.current_proposal with
-                 | Some p -> Toast.show (sprintf "%s has proposed a team" p.proposer)
-                 | None -> ()));
+               | Assassination -> m := { !m with modal = Mission_result }
+               | Mission_vote ->
+                 (match game.current_proposal with
+                  | Some p -> Toast.show (sprintf "%s's team approved" p.proposer)
+                  | None -> ())
+               | Proposal_vote ->
+                 (match game.current_proposal with
+                  | Some p -> Toast.show (sprintf "%s has proposed a team" p.proposer)
+                  | None -> ())
+               | Unknown_phase _ -> ());
              !m
          in
          set final)

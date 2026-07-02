@@ -66,7 +66,9 @@ let good_win : game_data =
     ]
   in
   { state = Game_ended
-  ; phase = "GOOD_WIN"
+  ; (* GOOD_WIN is an outcome state, not a phase; the real end-of-game phase for a lobby
+       with an assassin is ASSASSINATION (server/types.ts). *)
+    phase = Assassination
   ; players
   ; roles = role_names
   ; missions =
@@ -114,7 +116,7 @@ let evil_win : game_data =
     }
   in
   { state = Game_ended
-  ; phase = "ASSASSINATION"
+  ; phase = Assassination
   ; players
   ; roles = role_names
   ; missions = [ m1; m2; m3; pending_mission ~size:3; pending_mission ~size:3 ]
@@ -149,7 +151,7 @@ let psychic_tie : game_data =
     }
   in
   { state = Game_ended
-  ; phase = "GOOD_WIN"
+  ; phase = Assassination
   ; players
   ; roles = role_names
   ; missions =
@@ -182,7 +184,8 @@ let psychic_tie : game_data =
 (* An in-progress game: mission 1, first proposal pending, proposed by ALICE. *)
 let mid_game : game_data =
   { state = Active
-  ; phase = "TEAM_SELECTION"
+  ; (* TEAM_SELECTION was never a real token; the proposal phase is TEAM_PROPOSAL. *)
+    phase = Team_proposal
   ; players
   ; roles = role_names
   ; missions =

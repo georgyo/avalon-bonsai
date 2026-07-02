@@ -89,9 +89,22 @@ type game_state =
 
 val game_state_of_string : string -> game_state
 
+(** The in-game phase (server/types.ts: [game.phase]). [Unknown_phase] carries the raw
+    string of any unexpected token (including the empty/absent phase before a game
+    starts). *)
+type phase =
+  | Team_proposal
+  | Proposal_vote
+  | Mission_vote
+  | Assassination
+  | Unknown_phase of string
+[@@deriving sexp, equal, compare]
+
+val phase_of_string : string -> phase
+
 type game_data =
   { state : game_state
-  ; phase : string
+  ; phase : phase
   ; players : string list
   ; roles : string list
   ; missions : mission list

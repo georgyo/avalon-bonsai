@@ -49,7 +49,7 @@ let game_data (v : Ffi.any) : game_data =
   let outcome_v = Ffi.get v "outcome" in
   let options_v = Ffi.get v "options" in
   { state = game_state_of_string (Ffi.field_string v "state")
-  ; phase = Ffi.field_string v "phase"
+  ; phase = phase_of_string (Ffi.field_string v "phase")
   ; players = Ffi.field_str_list v "players"
   ; roles =
       (if Ffi.is_nullish (Ffi.get v "roles") then [] else Ffi.field_str_list v "roles")

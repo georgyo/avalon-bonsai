@@ -25,7 +25,11 @@ let game_player_list ~selected ~set_selected (local_ graph) =
     let team_size =
       Option.value_map g.current_mission ~default:1 ~f:(fun mi -> mi.team_size)
     in
-    let max_selected = if String.equal phase "TEAM_PROPOSAL" then team_size else 1 in
+    let max_selected =
+      match phase with
+      | Team_proposal -> team_size
+      | _ -> 1
+    in
     let toggle name =
       let next =
         if List.mem selected name ~equal:String.equal
@@ -40,57 +44,59 @@ let game_player_list ~selected ~set_selected (local_ graph) =
       set_selected next
     in
     let enable_checkbox name =
-      (String.equal phase "TEAM_PROPOSAL"
-       && Option.value_map g.current_proposer ~default:false ~f:(String.equal me))
-      || (String.equal phase "ASSASSINATION" && assassin && not (String.equal name me))
+      match phase with
+      | Team_proposal ->
+        Option.value_map g.current_proposer ~default:false ~f:(String.equal me)
+      | Assassination -> assassin && not (String.equal name me)
+      | _ -> false
     in
     let selected_for_mission name =
-      (String.equal phase "PROPOSAL_VOTE" || String.equal phase "MISSION_VOTE")
+      (match phase with
+       | Proposal_vote | Mission_vote -> true
+       | _ -> false)
       && Option.value_map g.current_proposal ~default:false ~f:(fun p ->
         List.mem p.team name ~equal:String.equal)
     in
     let was_on_last name =
       match phase with
-      | "TEAM_PROPOSAL" | "ASSASSINATION" ->
+      | Team_proposal | Assassination ->
         Option.value_map (Game.last_proposal g) ~default:false ~f:(fun p ->
           List.mem p.team name ~equal:String.equal)
-      | "PROPOSAL_VOTE" | "MISSION_VOTE" ->
+      | Proposal_vote | Mission_vote ->
         Option.value_map g.current_proposal ~default:false ~f:(fun p ->
           List.mem p.team name ~equal:String.equal)
-      | _ -> false
+      | Unknown_phase _ -> false
     in
     let has_voted name =
-      String.equal phase "PROPOSAL_VOTE"
+      equal_phase phase Proposal_vote
       && Option.value_map g.current_proposal ~default:false ~f:(fun p ->
         List.mem p.votes name ~equal:String.equal)
     in
     let waiting name =
-      String.equal phase "PROPOSAL_VOTE"
+      equal_phase phase Proposal_vote
       && not
            (Option.value_map g.current_proposal ~default:false ~f:(fun p ->
               List.mem p.votes name ~equal:String.equal))
     in
     let approved name =
-      if String.equal phase "TEAM_PROPOSAL" || String.equal phase "ASSASSINATION"
-      then
+      match phase with
+      | Team_proposal | Assassination ->
         Option.value_map (Game.last_proposal g) ~default:false ~f:(fun p ->
           List.mem p.votes name ~equal:String.equal)
-      else if String.equal phase "MISSION_VOTE"
-      then
+      | Mission_vote ->
         Option.value_map g.current_proposal ~default:false ~f:(fun p ->
           List.mem p.votes name ~equal:String.equal)
-      else false
+      | _ -> false
     in
     let rejected name =
-      if String.equal phase "TEAM_PROPOSAL" || String.equal phase "ASSASSINATION"
-      then
+      match phase with
+      | Team_proposal | Assassination ->
         Option.value_map (Game.last_proposal g) ~default:false ~f:(fun p ->
           not (List.mem p.votes name ~equal:String.equal))
-      else if String.equal phase "MISSION_VOTE"
-      then
+      | Mission_vote ->
         Option.value_map g.current_proposal ~default:false ~f:(fun p ->
           not (List.mem p.votes name ~equal:String.equal))
-      else false
+      | _ -> false
     in
     let crown_color = if g.current_proposal_idx < 4 then "#fcfc00" else "#cc0808" in
     let status_icons name =
