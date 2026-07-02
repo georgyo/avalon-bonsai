@@ -116,13 +116,9 @@ let team_vote_action (local_ graph) =
       Option.value_map g.current_proposal ~default:"" ~f:(fun p ->
         Util.join_with_and p.team)
     in
-    let disabled v =
-      already
-      || ((match voted with
-           | Some _ -> true
-           | None -> false)
-          && not (Option.value_map voted ~default:false ~f:(Bool.equal v)))
-    in
+    (* disable both buttons once an optimistic vote is in flight (until server state
+       catches up), so a double-click can't submit the vote twice *)
+    let disabled = already || Option.is_some voted in
     let vote v =
       eff (fun () -> State.vote_team v ~on_ok:(fun () -> run (set_voted (Some v))))
     in
@@ -132,7 +128,7 @@ let team_vote_action (local_ graph) =
       div
         ~attrs:[ Ui.row; Ui.between ]
         [ btn
-            ~disabled:(disabled true)
+            ~disabled
             ~on_click:(vote true)
             [ (if voted_yes
                then fa ~color:"green" "fas" "fa-vote-yea"
@@ -140,7 +136,7 @@ let team_vote_action (local_ graph) =
             ; N.text " Approve"
             ]
         ; btn
-            ~disabled:(disabled false)
+            ~disabled
             ~on_click:(vote false)
             [ (if voted_no
                then fa ~color:"red" "fas" "fa-vote-yea"
@@ -162,8 +158,8 @@ let team_vote_action (local_ graph) =
 let mission_action (local_ graph) =
   let done_, set_done = Bonsai.state false graph in
   let error, set_error = Bonsai.state "" graph in
-  (* reset the optimistic "already submitted" flag whenever the mission changes, so a vote
-     on one mission doesn't suppress the buttons on the next *)
+  (* reset the optimistic "already submitted" flag and any stale error banner whenever the
+     mission changes, so a vote (or failure) on one mission doesn't leak into the next *)
   let midx =
     let%arr m = State.value () in
     match D.game m with
@@ -175,8 +171,8 @@ let mission_action (local_ graph) =
       midx
       ~equal:Int.equal
       ~callback:
-        (let%arr set_done in
-         fun _ -> set_done false)
+        (let%arr set_done and set_error in
+         fun _ -> Effect.Many [ set_done false; set_error "" ])
       graph
   in
   let%arr m = State.value ()
@@ -245,6 +241,13 @@ let mission_action (local_ graph) =
 
 let assassination_action ~selected (local_ graph) =
   let assassinating, set_assassinating = Bonsai.state false graph in
+  let () =
+    on_proposal_change
+      graph
+      ~reset:
+        (let%arr set_assassinating in
+         set_assassinating false)
+  in
   let%arr m = State.value ()
   and selected
   and assassinating
@@ -293,10 +296,10 @@ type action_kind =
   | No_action
 [@@deriving sexp, equal]
 
-(* Only the active action component is instantiated (via [match%sub]); when the phase
-   changes Bonsai resets the inactive branch's state, mirroring the original's v-if
-   remount semantics (so e.g. a mission "already voted" flag doesn't leak across
-   missions). *)
+(* Only the active action component is instantiated (via [match%sub]). Note that match%sub
+   does NOT reset the inactive branch's state in this Bonsai version, so each pane
+   explicitly resets its own optimistic flags via [on_proposal_change] (or an equivalent
+   on-change hook) to avoid state leaking across rounds and games. *)
 let action_pane ~selected (local_ graph) =
   let kind =
     let%arr m = State.value () in

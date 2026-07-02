@@ -36,10 +36,31 @@ let reorder_to list ~name ~target_idx =
 
 (* ---- LobbySelect ---- *)
 let lobby_select (local_ graph) =
-  let name_default =
-    Option.value_map (State.model ()).user ~default:"" ~f:(fun u -> u.name)
+  let name, set_name = Bonsai.state "" graph in
+  (* Pre-fill the name field from the signed-in user. Firebase auth resolves after the
+     graph is built, so a one-shot read at build time would miss it: instead watch the
+     user's name and seed the field when it becomes available, but only while the field is
+     still empty (peeked at callback time) so user typing is never clobbered. *)
+  let peek_name = Bonsai.peek name graph in
+  let user_name =
+    let%arr m = State.value () in
+    Option.value_map m.user ~default:"" ~f:(fun u -> u.name)
   in
-  let name, set_name = Bonsai.state name_default graph in
+  let () =
+    Bonsai.Edge.on_change
+      user_name
+      ~equal:String.equal
+      ~callback:
+        (let%arr set_name and peek_name in
+         fun user_name ->
+           if String.is_empty user_name
+           then Effect.Ignore
+           else (
+             match%bind.Effect peek_name with
+             | Bonsai.Computation_status.Active "" -> set_name user_name
+             | Active _ | Inactive -> Effect.Ignore))
+      graph
+  in
   let lobby, set_lobby = Bonsai.state "" graph in
   let error, set_error = Bonsai.state "" graph in
   let show_lobby_input, set_show_lobby_input = Bonsai.state false graph in
@@ -60,6 +81,7 @@ let lobby_select (local_ graph) =
   and set_joining in
   let do_create =
     eff (fun () ->
+      run (set_error "");
       run (set_creating true);
       State.create_lobby
         ~name
@@ -71,6 +93,7 @@ let lobby_select (local_ graph) =
   in
   let do_join =
     eff (fun () ->
+      run (set_error "");
       run (set_joining true);
       State.join_lobby
         ~name
@@ -100,7 +123,7 @@ let lobby_select (local_ graph) =
               [ N.text "Create Lobby" ]
           ; btn
               ~disabled:(String.is_empty name || creating)
-              ~on_click:(set_show_lobby_input true)
+              ~on_click:(Effect.Many [ set_error ""; set_show_lobby_input true ])
               [ N.text "Join Lobby" ]
           ]
       ]
@@ -122,7 +145,7 @@ let lobby_select (local_ graph) =
               [ N.text "Join Lobby" ]
           ; btn
               ~disabled:joining
-              ~on_click:(set_show_lobby_input false)
+              ~on_click:(Effect.Many [ set_error ""; set_show_lobby_input false ])
               [ N.text "Cancel" ]
           ]
       ]

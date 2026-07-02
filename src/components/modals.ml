@@ -48,6 +48,17 @@ let start_node ~close:_ =
     ]
 ;;
 
+(* Defensive fallback for a dialog whose data is missing: without a body, the toplayer
+   modal would still dim the page but show an invisible box with no way to close it. *)
+let fallback_node ~title ~message ~close =
+  div
+    ~attrs:[ Ui.overlay_card ]
+    [ card_title ~attrs:[ Ui.title_bar ] [ N.h3 [ N.text title ] ]
+    ; card_text [ N.p [ N.text message ] ]
+    ; div ~attrs:[ Ui.row; Ui.actions ] [ btn ~on_click:close [ N.text "Close" ] ]
+    ]
+;;
+
 let mission_node (g : Game.t) ~close =
   let idx =
     if g.current_mission_idx < 0
@@ -55,7 +66,11 @@ let mission_node (g : Game.t) ~close =
     else g.current_mission_idx
   in
   match List.nth (Game.missions g) (idx - 1) with
-  | None -> N.none
+  | None ->
+    fallback_node
+      ~title:"Mission Result"
+      ~message:"No mission result is available yet."
+      ~close
   | Some mission ->
     let title =
       match mission.state with
@@ -139,22 +154,28 @@ let end_node (g : Game.t) ~close =
    so we map it to an option and let {!Ui.modal} portal the matching dialog into the top
    layer. *)
 let modals (local_ graph) : unit =
-  let tag =
+  (* pair the tag with the live model so the dialog's content re-renders as the model
+     changes, rather than freezing a snapshot taken when the modal opened *)
+  let tag_and_model =
     let%arr m = State.value () in
     match m.modal with
-    | M.Start_game -> Some `Start
-    | M.Mission_result -> Some `Mission
-    | M.End_game -> Some `End
+    | M.Start_game -> Some (`Start, m)
+    | M.Mission_result -> Some (`Mission, m)
+    | M.End_game -> Some (`End, m)
     | M.No_modal -> None
   in
   Ui.modal
-    tag
+    tag_and_model
     ~on_close:(Bonsai.return (eff (fun () -> State.set_modal No_modal)))
-    ~content:(fun which ~close ->
-      match which, D.game (State.model ()) with
+    ~content:(fun (which, m) ~close ->
+      match which, D.game m with
       | `Start, _ -> start_node ~close
       | `Mission, Some g -> mission_node g ~close
       | `End, Some g -> end_node g ~close
-      | (`Mission | `End), None -> N.none)
+      | (`Mission | `End), None ->
+        fallback_node
+          ~title:"Game Unavailable"
+          ~message:"The game data for this dialog is no longer available."
+          ~close)
     graph
 ;;
