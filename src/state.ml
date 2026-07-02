@@ -8,8 +8,6 @@ open Types
     Firebase listeners and UI actions push new snapshots into it. This replaces the Vue
     [AvalonGame] + [LobbySubscription] + [GameConfig] objects and the mitt EventBus. *)
 
-let _ = () (* action cache test *)
-
 let firebase_config : Firebase.config =
   { api_key = "AIzaSyCwhCvO8NbTusBaHmHHnNT7yC0_11UL2RI"
   ; auth_domain = "georgyo-avalon.firebaseapp.com"
@@ -386,16 +384,16 @@ let on_auth_state_changed (user : Firebase.user option) =
 ;;
 
 let init () =
-  (* The modular SDK is imported asynchronously (ESM, no bundler), so defer all Firebase
-     setup until [on_ready] has dynamically imported it. *)
+  (* The Firebase SDK is a vendored bundle embedded ahead of the OCaml code in the page
+     bundle; [on_ready] just snapshots [globalThis.__fb] before running the setup. *)
   Firebase.on_ready
     ~on_error:(fun () ->
       update ~f:(fun m ->
         { m with
           connection_error =
             Some
-              "Couldn't load Firebase. Check your connection or any content/ad blockers, \
-               then reload."
+              "Firebase failed to initialize (the embedded Firebase bundle did not run). \
+               Try a hard reload; if it persists this is a build problem."
         }))
     (fun () ->
       Firebase.init firebase_config;
@@ -533,9 +531,11 @@ let whitelist = [ "gmail.com"; "yahoo.com"; "outlook.com"; "hotmail.com"; "live.
 
 let send_sign_in_link ~email ~on_ok ~on_err =
   let hostname = Ffi.window_origin () ^ "/" in
-  let url =
-    Js.to_string (Js.encodeURI (Js.string (hostname ^ "?confirmEmail=" ^ email)))
-  in
+  (* Percent-encode only the email value: [encodeURI] leaves [+] alone, and the URL param
+     decoder on the return trip turns [+] into a space, breaking addresses like
+     alice+x@gmail.com. *)
+  let encoded_email = Js.to_string (Js.encodeURIComponent (Js.string email)) in
+  let url = hostname ^ "?confirmEmail=" ^ encoded_email in
   let settings = { Firebase.url; handle_code_in_app = true } in
   Firebase.send_sign_in_link_to_email ~email ~settings ~on_ok ~on_err:(fun e ->
     on_err (Firebase.error_message e))

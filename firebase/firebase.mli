@@ -1,12 +1,13 @@
 open Js_of_ocaml
 
-(** Typed bindings to the Firebase v12 modular JS SDK. {!on_ready} loads the ESM build
-    itself via a runtime dynamic [import()] (no bundler) before any call is made.
+(** Typed bindings to the Firebase v12 modular JS SDK. The SDK is a vendored bundle (built
+    from [shim/] to [vendor/firebase-shim.js]) embedded ahead of the OCaml code in the
+    page bundle; it runs at startup and exposes its exports on [globalThis.__fb].
 
     The handle types below are abstract and distinct, modeled on the [@firebase/auth] and
     [@firebase/firestore] TypeScript definitions, so the type checker rejects mixing them
     up and callers read JS objects only through the typed accessors here. Wrap setup in
-    {!on_ready} so it runs after the asynchronous dynamic import has completed. *)
+    {!on_ready}, which snapshots [globalThis.__fb] before running its callback. *)
 
 (** [User] — an authenticated user. *)
 type user
@@ -37,9 +38,10 @@ type action_code_settings =
   ; handle_code_in_app : bool
   }
 
-(** Run [f] once the modular SDK is loaded (immediately if already loaded). [on_error]
-    runs if the dynamic import fails (e.g. the CDN is blocked or offline) so the caller
-    can show a recoverable error instead of hanging. *)
+(** Run [f] with the SDK available: the embedded bundle has already run by the time OCaml
+    code executes, so this just snapshots [globalThis.__fb] and calls [f]. [on_error] runs
+    if that global is missing (i.e. the bundle was not embedded or did not run — a build
+    problem) so the caller can show an error instead of hanging. *)
 val on_ready : ?on_error:(unit -> unit) -> (unit -> unit) -> unit
 
 (** [initializeApp] the default app. Must run before any other call; do it in {!on_ready}. *)

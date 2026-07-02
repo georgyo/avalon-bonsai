@@ -92,7 +92,7 @@ let view_role_button (local_ graph) =
       in
       {%html.jsx|
         <div *{[ Style.bottom_sheet_overlay ]} on_click=%{fun _ -> eff (fun () -> State.set_show_role_sheet false)}>
-          <div class="bottom-sheet" on_click=%{fun _ -> Effect.Many []}>%{body}</div>
+          <div class="bottom-sheet" on_click=%{fun _ -> Vdom.Effect.Stop_propagation}>%{body}</div>
         </div>
       |})
   in

@@ -44,7 +44,28 @@ dune build bin/main.bc.js  # just the client bundle
 
 Outputs to `_build/default/bin/`: `index.html` and `main.bc.js`. The styles are injected
 at runtime by ppx_css (no separate stylesheet) plus the small global block in `index.html`;
-the Firebase SDK is loaded at runtime via a dynamic `import()`, not bundled.
+the Firebase SDK is vendored (`firebase/vendor/firebase-shim.js`, an ES5 bundle built by
+`firebase/shim/build.sh`) and embedded into `main.bc.js` via the js_of_ocaml
+`javascript_files` stanza in `firebase/dune`, exposed as `globalThis.__fb`.
+
+## Building with Nix
+
+The flake builds the whole toolchain (OxCaml compiler + Jane Street packages) hermetically
+via opam-nix:
+
+```
+nix build .#default   # hermetic client-bundle build; output in result/
+nix develop           # dev shell with the toolchain
+```
+
+The opam solver's resolution is materialized into the committed `package-defs.json`. After
+bumping flake inputs, regenerate it:
+
+```
+nix build .#materialize && cp -L result package-defs.json
+```
+
+CI (`.github/workflows/nix.yml`) builds the flake.
 
 ## Test
 
@@ -72,12 +93,12 @@ proxy. (`python3 -m http.server` will serve the static files but cannot proxy `/
 
 - Built with the cont Bonsai API; the imperative Firebase listeners push snapshots into a
   single `Bonsai.Expert.Var` that drives the whole UI.
-- The Firebase v12 modular SDK is fetched at startup via a dynamic `import()` (no bundler);
-  if that load fails (CDN blocked, offline) the app shows a recoverable error rather than
-  hanging on a spinner.
+- The Firebase v12 modular SDK is not fetched at runtime: a vendored ES5 bundle
+  (`firebase/vendor/firebase-shim.js`, rebuilt with `firebase/shim/build.sh`) is embedded
+  ahead of the OCaml code in `main.bc.js` and exposes its exports on `globalThis.__fb`;
+  if that global is missing the app shows an error instead of hanging on a spinner (it
+  indicates a broken build, not a blocked CDN).
 - Icons use FontAwesome 6 + Material Design Icons web fonts (loaded via CDN in
   `index.html`) instead of Vuetify's bundled icon sets.
 - The dev bundle is large and unminified; pass `--profile release` (e.g. `dune build
   --profile release bin/main.bc.js bin/index.html`) for an optimized build.
-</content>
-</invoke>

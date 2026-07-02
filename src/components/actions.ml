@@ -110,7 +110,7 @@ let team_vote_action (local_ graph) =
     let proposer_label =
       if Option.value_map g.current_proposer ~default:false ~f:(String.equal me)
       then "your"
-      else Option.value g.current_proposer ~default:"" ^ "'s "
+      else Option.value g.current_proposer ~default:"" ^ "'s"
     in
     let team =
       Option.value_map g.current_proposal ~default:"" ~f:(fun p ->

@@ -3,9 +3,9 @@ name: Nix
 # Builds the client bundle hermetically from the opam-nix flake (flake.nix). This compiles
 # the OxCaml compiler and the Jane Street Bonsai preview packages from the oxcaml
 # opam-repository, so the FIRST run on a cold cache is very slow (tens of minutes). The Nix
-# store is cached to the GitHub Actions cache, so subsequent runs reuse the toolchain and are
-# fast. For heavy use, point this at a Cachix cache instead (the GHA cache is capped at 10 GB
-# per repo, and the OxCaml closure is large).
+# store is cached to the GitHub Actions cache via nix-community/cache-nix-action, so
+# subsequent runs reuse the toolchain and are fast. For heavy use, point this at a Cachix
+# cache instead (the GHA cache is capped at 10 GB per repo, and the OxCaml closure is large).
 #
 # The build is fully pure (no --impure): the one dependency with an unpinned git source
 # (zarith) is pinned to an explicit rev + hash in flake.nix, and flake.lock pins the opam
@@ -25,10 +25,21 @@ concurrency:
 jobs:
   nix-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Cache the Nix store (the OxCaml toolchain is expensive to rebuild)
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
 
       - name: Build the flake (client bundle + avalon_core unit tests)
         # doCheck = true in the derivation runs `dune runtest test`, so this builds and tests.

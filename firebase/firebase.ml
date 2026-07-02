@@ -54,8 +54,8 @@ let field_string_opt (o : any) (k : string) : string option =
 let field_string ?(default = "") o k = Option.value (field_string_opt o k) ~default
 let to_opt (v : any) : any option = if is_nullish v then None else Some v
 
-(* The merged exports of the modular ESM entry points, populated by {!on_ready} via
-   dynamic import; [call] dispatches a free function by name. *)
+(* The merged exports of the modular SDK entry points, snapshotted from the embedded
+   bundle's [globalThis.__fb] by {!on_ready}; [call] dispatches a free function by name. *)
 let exports_ref : any option ref = ref None
 
 let api () : any =
