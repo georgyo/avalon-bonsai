@@ -47,12 +47,20 @@ let selectable_role_list (local_ graph) =
       else N.none
     in
     let info_btn =
-      btn ~attrs:[ Ui.icon_btn ] ~on_click:(set_info (Some role)) [ mdi "information" ]
+      btn
+        ~attrs:[ Ui.icon_btn; A.create "aria-label" (sprintf "About %s" role.name) ]
+        ~on_click:(set_info (Some role))
+        [ mdi "information" ]
     in
+    (* the checkbox and the role name live in one <label> (display: contents, so the flex
+       row layout is untouched): clicking the name toggles the box, and screen readers
+       announce the role's name for it *)
     {%html.jsx|
       <li class="v-list-item">
-        <div *{[ Ui.li_prepend ]}>%{checkbox}%{team_icon role.team}</div>
-        <div *{[ Ui.li_title ]}>#{role.name}</div>
+        <label *{[ Ui.li_label ]}>
+          <div *{[ Ui.li_prepend ]}>%{checkbox}%{team_icon role.team}</div>
+          <div *{[ Ui.li_title ]}>#{role.name}</div>
+        </label>
         %{info_btn}
       </li>
     |}
@@ -64,7 +72,7 @@ let selectable_role_list (local_ graph) =
 (* static role display (in-game participants tab) *)
 let role_list_view (roles : role list) =
   let item (role : role) =
-    let attrs = [ A.class_ "v-list-item"; A.create "title" role.description ] in
+    let attrs = [ A.class_ "v-list-item"; Ui.tooltip_text role.description ] in
     {%html.jsx|
       <li *{attrs}>
         <div *{[ Ui.li_prepend ]}>%{team_icon role.team}</div>

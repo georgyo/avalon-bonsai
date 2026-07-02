@@ -93,8 +93,10 @@ module Style =
   /* list-item internals; the .v-list / .v-list-item rules themselves are global (index.html) */
   .li_prepend { display: flex; align-items: center; gap: 6px; min-width: 28px; }
   .li_mid { width: 36px; display: flex; align-items: center; justify-content: center; }
-  .li_title { flex: 1 1 auto; }
+  .li_title { flex: 1 1 auto; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .li_append { min-width: 28px; text-align: right; }
+  /* wraps a row's checkbox + name in a <label> without disturbing the flex row layout */
+  .li_label { display: contents; }
 
   /* text fields (Vuetify filled variant: grey fill, bottom rule, rounded top) */
   .text_field {
@@ -193,7 +195,9 @@ let fa_layers ?(attrs = []) children =
    a graph-level component returning [unit] rather than a node to splice into the tree.
    Closing (Esc, click-outside, or a [~close]-driven button) runs [on_close]; typically
    that clears the same [value] option you pass in. *)
-let modal value ~on_close ~content (local_ graph) : unit =
+let modal ?(box_attrs = [ Style.modal_box ]) value ~on_close ~content (local_ graph)
+  : unit
+  =
   let autoclose =
     Bonsai_web_toplayer.Autoclose.create
       ~close:on_close
@@ -204,7 +208,7 @@ let modal value ~on_close ~content (local_ graph) : unit =
     match%sub value with
     | Some v ->
       Bonsai_web_toplayer.Modal.always_open
-        ~attrs:(Bonsai.return [ Style.modal_box ])
+        ~attrs:(Bonsai.return box_attrs)
         ~autoclose
         ~lock_body_scroll:(Bonsai.return true)
         ~content:(fun (local_ _graph) ->
@@ -250,6 +254,22 @@ let error_text error =
    title. *)
 let tooltip_text (s : string) : Vdom.Attr.t =
   Bonsai_web_toplayer.tooltip ~show_delay:(Time_ns.Span.of_ms 200.) (N.text s)
+;;
+
+(* A Vuetify-style tab strip: one button per label, the [active]-index tab gets the
+   underline indicator, and clicking tab [i] runs [on_select i]. [tab_attrs] are extra
+   attributes added to every tab button (before the tab classes). *)
+let tab_strip ?(tab_attrs = []) ~active ~on_select labels =
+  let tab_btn idx label =
+    btn
+      ~attrs:
+        (tab_attrs
+         @ if idx = active then [ Style.tab; Style.tab_active ] else [ Style.tab ])
+      ~on_click:(on_select idx)
+      label
+  in
+  let tabs = List.mapi labels ~f:tab_btn in
+  {%html.jsx|<div *{[ Style.tabs ]}>*{tabs}</div>|}
 ;;
 
 (* mailto feedback link, styled as a button (port of the Vue "Email"/"Send feedback" btns) *)
@@ -301,6 +321,7 @@ let li_prepend = Style.li_prepend
 let li_mid = Style.li_mid
 let li_title = Style.li_title
 let li_append = Style.li_append
+let li_label = Style.li_label
 let field_error = Style.field_error
 let welcome = Style.welcome
 let overlay_card = Style.overlay_card

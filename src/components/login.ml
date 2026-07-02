@@ -63,11 +63,11 @@ let user_login (local_ graph) =
       {%html.jsx|<div *{[ Style.alert_error ]}>%{textf "%s Please try logging in again." e}</div>|}
     | None -> N.none
   in
-  let tab_button value lbl =
-    btn
-      ~attrs:(if String.equal tab value then [ Ui.tab; Ui.tab_active ] else [ Ui.tab ])
-      ~on_click:(set_tab value)
-      [ N.text lbl ]
+  let strip =
+    tab_strip
+      ~active:(if String.equal tab "email" then 0 else 1)
+      ~on_select:(fun i -> set_tab (if i = 0 then "email" else "anonymous"))
+      [ [ N.text "Email" ]; [ N.text "Anonymous" ] ]
   in
   let email_pane =
     if not submitted
@@ -111,10 +111,7 @@ let user_login (local_ graph) =
         <div *{[ Ui.col; Ui.center ]}>
           %{alert}
           %{card_title [ heading; subtitle ]}
-          <div *{[ Ui.tabs ]}>
-            %{tab_button "email" "Email"}
-            %{tab_button "anonymous" "Anonymous"}
-          </div>
+          %{strip}
           %{if String.equal tab "email" then email_pane else anon_pane}
           %{feedback_link "Email"}
         </div>

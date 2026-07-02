@@ -169,11 +169,16 @@ let game_player_list ~selected ~set_selected (local_ graph) =
         then fa "fas" "fa-hammer"
         else N.none
       in
+      (* the checkbox and the name live in one <label> (display: contents, so the flex row
+         layout is untouched): clicking the name toggles the box, and screen readers
+         announce the player's name for it *)
       {%html.jsx|
         <li class="v-list-item">
-          <div *{[ Ui.li_prepend ]}>%{checkbox}</div>
-          <div *{[ Ui.li_mid ]}>%{marker}</div>
-          <div *{[ Ui.li_title ]}>#{name}</div>
+          <label *{[ Ui.li_label ]}>
+            <div *{[ Ui.li_prepend ]}>%{checkbox}</div>
+            <div *{[ Ui.li_mid ]}>%{marker}</div>
+            <div *{[ Ui.li_title ]}>#{name}</div>
+          </label>
           <div *{[ Ui.li_append ]}>%{status_icons name}</div>
         </li>
       |}
@@ -197,18 +202,18 @@ let game_participants ~selected ~set_selected (local_ graph) =
     let role_objs =
       List.filter_map (Game.roles g) ~f:(fun r -> Map.find Avalonlib.role_map r)
     in
-    let tab_attrs value =
-      if String.equal tab value then [ Ui.tab; Ui.tab_active ] else [ Ui.tab ]
-    in
     let body =
       if String.equal tab "players" then players else Role_list.role_list_view role_objs
     in
+    let strip =
+      tab_strip
+        ~active:(if String.equal tab "players" then 0 else 1)
+        ~on_select:(fun i -> set_tab (if i = 0 then "players" else "roles"))
+        [ [ N.text "Players" ]; [ N.text "Roles" ] ]
+    in
     {%html.jsx|
       <div>
-        <div *{[ Ui.tabs ]}>
-          %{btn ~attrs:(tab_attrs "players") ~on_click:(set_tab "players") [ N.text "Players" ]}
-          %{btn ~attrs:(tab_attrs "roles") ~on_click:(set_tab "roles") [ N.text "Roles" ]}
-        </div>
+        %{strip}
         %{body}
       </div>
     |}

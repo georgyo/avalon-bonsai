@@ -112,6 +112,7 @@ let lobby_select (local_ graph) =
           ~placeholder:"Your Name"
           ~value:name
           ~on_input:(fun s -> set_name (String.uppercase s))
+          ~extra:[ A.create "maxlength" "20" ]
           ()
       ; error_text error
       ; div
@@ -234,13 +235,13 @@ let lobby_player_list (local_ graph) =
               ]
             [ mdi "drag-horizontal-variant" ]
         ; btn
-            ~attrs:[ Ui.icon_btn ]
+            ~attrs:[ Ui.icon_btn; A.create "aria-label" (sprintf "Move %s up" player) ]
             ~disabled:(idx = 0)
             ~on_click:
               (eff (fun () -> State.set_player_list (swap_at m.player_list (idx - 1))))
             [ mdi "chevron-up" ]
         ; btn
-            ~attrs:[ Ui.icon_btn ]
+            ~attrs:[ Ui.icon_btn; A.create "aria-label" (sprintf "Move %s down" player) ]
             ~disabled:(idx = n - 1)
             ~on_click:(eff (fun () -> State.set_player_list (swap_at m.player_list idx)))
             [ mdi "chevron-down" ]
@@ -251,7 +252,7 @@ let lobby_player_list (local_ graph) =
       if D.is_admin m && (not (String.equal player me)) && not (D.is_game_in_progress m)
       then
         [ btn
-            ~attrs:[ Ui.icon_btn ]
+            ~attrs:[ Ui.icon_btn; A.create "aria-label" (sprintf "Kick %s" player) ]
             ~on_click:(set_kick_target (Some player))
             [ mdi "close" ]
         ]

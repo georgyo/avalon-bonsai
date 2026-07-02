@@ -57,7 +57,7 @@ let game_missions (local_ graph) =
       | Some prev -> equal_mission_state prev.state M_pending
       | None -> false
     in
-    let tab idx (mission : mission) =
+    let tab_icon idx (mission : mission) =
       let base =
         match mission.state with
         | M_pending ->
@@ -73,13 +73,7 @@ let game_missions (local_ graph) =
         then [ spanc ~attrs:[ Style.fails_dot ] [ fa ~color:"red" "fas" "fa-circle" ] ]
         else []
       in
-      let icon = fa_layers (base @ dot) in
-      btn
-        ~attrs:
-          (Style.tab_mission
-           :: (if active = idx then [ Ui.tab; Ui.tab_active ] else [ Ui.tab ]))
-        ~on_click:(set_active idx)
-        [ icon ]
+      fa_layers (base @ dot)
     in
     let panel idx (mission : mission) =
       let bg =
@@ -134,11 +128,17 @@ let game_missions (local_ graph) =
         ~attrs:[ bg; Style.mission_panel ]
         [ card_text ~attrs:[ Ui.caption ] [ header; detail; log ] ]
     in
-    let tabs = List.mapi missions ~f:tab in
+    let strip =
+      tab_strip
+        ~tab_attrs:[ Style.tab_mission ]
+        ~active
+        ~on_select:set_active
+        (List.mapi missions ~f:(fun idx mission -> [ tab_icon idx mission ]))
+    in
     let panel_node =
       match List.nth missions active with
       | Some mission -> panel active mission
       | None -> N.none
     in
-    {%html.jsx|<div><div *{[ Ui.tabs ]}>*{tabs}</div>%{panel_node}</div>|}
+    {%html.jsx|<div>%{strip}%{panel_node}</div>|}
 ;;

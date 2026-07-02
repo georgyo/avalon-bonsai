@@ -19,8 +19,11 @@ module Style =
   .toolbar_email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
   .quit_text { display: inline; }
 
-  /* bottom sheet (view role); [.bottom-sheet] kept global (index.html) so the e2e suite can read the role text */
-  .bottom_sheet_overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: flex-end; }
+  /* bottom sheet (view role); [.bottom-sheet] kept global (index.html) so the e2e suite can read the role text.
+     [sheet_box] restyles the toplayer modal container from a centered dialog to a
+     bottom-anchored, full-width sheet. */
+  .sheet_box { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: 100vw; max-height: 100vh; border: none; background: transparent; padding: 0; overflow: visible; }
+  .sheet_box::backdrop { background: rgba(0,0,0,0.4); }
   .sheet { border-radius: 0; box-shadow: none; margin: 0; }
 
   @media (max-width: 599px) {
@@ -30,19 +33,20 @@ module Style =
 |}]
 
 (* ---- ViewRoleButton (private) ---- *)
+(* The sheet itself rides the shared toplayer modal machinery ([Ui.modal] with a
+   bottom-anchored container instead of the centered box), so it gets Esc-to-close,
+   click-outside-to-close, focus-trapping and body-scroll lock like the other dialogs; its
+   open state stays in [State] ([show_role_sheet]) as before. *)
 let view_role_button (local_ graph) =
-  let%arr m = State.value () in
-  let sheet = m.show_role_sheet in
-  let activator =
-    btn
-      ~attrs:[ Ui.outlined ]
-      ~on_click:(eff (fun () -> State.set_show_role_sheet true))
-      [ mdi "account"; N.span [ N.text (D.user_name m) ] ]
+  let sheet_model =
+    let%arr m = State.value () in
+    if m.show_role_sheet then Some m else None
   in
-  let sheet_node =
-    if not sheet
-    then N.none
-    else (
+  Ui.modal
+    ~box_attrs:[ Style.sheet_box ]
+    sheet_model
+    ~on_close:(Bonsai.return (eff (fun () -> State.set_show_role_sheet false)))
+    ~content:(fun m ~close:_ ->
       let body =
         if not (D.is_game_in_progress m)
         then
@@ -90,13 +94,16 @@ let view_role_button (local_ graph) =
                   ]
               ])
       in
-      {%html.jsx|
-        <div *{[ Style.bottom_sheet_overlay ]} on_click=%{fun _ -> eff (fun () -> State.set_show_role_sheet false)}>
-          <div class="bottom-sheet" on_click=%{fun _ -> Vdom.Effect.Stop_propagation}>%{body}</div>
-        </div>
-      |})
+      {%html.jsx|<div class="bottom-sheet">%{body}</div>|})
+    graph;
+  let%arr m = State.value () in
+  let activator =
+    btn
+      ~attrs:[ Ui.outlined ]
+      ~on_click:(eff (fun () -> State.set_show_role_sheet true))
+      [ mdi "account"; N.span [ N.text (D.user_name m) ] ]
   in
-  {%html.jsx|<div>%{activator}%{sheet_node}</div>|}
+  {%html.jsx|<div>%{activator}</div>|}
 ;;
 
 (* ---- QuitButton (private) ---- *)

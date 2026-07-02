@@ -36,9 +36,12 @@ val fa_layers : ?attrs:Vdom.Attr.t list -> Vdom.Node.t list -> Vdom.Node.t
     while [value] is [Some]. Portaled into the browser's top layer, so it returns [unit]
     rather than a node to splice into the tree; closing runs [on_close] (which typically
     clears the same [value] option). [content] receives the [Some] payload and a [~close]
-    effect for its own buttons. *)
+    effect for its own buttons. [box_attrs] styles the top-layer container itself
+    (defaults to the centered [modal_box]; pass something else for e.g. a bottom
+    sheet). *)
 val modal
-  :  'a option Bonsai.t
+  :  ?box_attrs:Vdom.Attr.t list
+  -> 'a option Bonsai.t
   -> on_close:unit Effect.t Bonsai.t
   -> content:('a -> close:unit Effect.t -> Vdom.Node.t)
   -> local_ Bonsai.graph
@@ -59,6 +62,16 @@ val error_text : string -> Vdom.Node.t
 (** A styled, touch-capable hover tooltip attribute (toplayer), for use in place of a bare
     [title=] attribute. *)
 val tooltip_text : string -> Vdom.Attr.t
+
+(** A Vuetify-style tab strip: one button per label, the [active]-index tab gets the
+    underline indicator, and clicking tab [i] runs [on_select i]. [tab_attrs] are extra
+    attributes added to every tab button (before the tab classes). *)
+val tab_strip
+  :  ?tab_attrs:Vdom.Attr.t list
+  -> active:int
+  -> on_select:(int -> unit Effect.t)
+  -> Vdom.Node.t list list
+  -> Vdom.Node.t
 
 val feedback_link : string -> Vdom.Node.t
 
@@ -104,6 +117,7 @@ val li_prepend : Vdom.Attr.t
 val li_mid : Vdom.Attr.t
 val li_title : Vdom.Attr.t
 val li_append : Vdom.Attr.t
+val li_label : Vdom.Attr.t
 val field_error : Vdom.Attr.t
 val welcome : Vdom.Attr.t
 val overlay_card : Vdom.Attr.t
