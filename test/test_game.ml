@@ -128,6 +128,75 @@ let%test_unit "hammer index wraps around the player list" =
     ~expect:"proposer=EVE hammer=DAVE"
 ;;
 
+(* MISSION_VOTE situation: the current mission has NO Pending proposal (its last proposal
+   was approved and the team is out voting). The current proposal must fall back to the
+   last one, and the hammer is still derived from it. *)
+let%test_unit "no pending proposal (MISSION_VOTE) falls back to the last proposal" =
+  let m0 : Types.mission =
+    { state = M_pending
+    ; team = [ "ALICE"; "BOB" ]
+    ; team_size = 2
+    ; fails_required = 1
+    ; num_fails = 0
+    ; proposals =
+        [ Fixtures.rejected "ALICE" [ "ALICE"; "CARL" ]
+        ; Fixtures.approved "BOB" [ "ALICE"; "BOB" ]
+        ]
+    }
+  in
+  let g =
+    Game.create
+      { Fixtures.mid_game with
+        phase = Mission_vote
+      ; missions = m0 :: List.tl_exn Fixtures.mid_game.missions
+      }
+      ~role_map:Fixtures.role_map
+  in
+  [%test_result: string]
+    (sprintf
+       "idx=%d proposer=%s hammer=%s"
+       g.current_proposal_idx
+       (Option.value g.current_proposer ~default:"-")
+       (Option.value g.hammer ~default:"-"))
+    ~expect:"idx=1 proposer=BOB hammer=EVE"
+;;
+
+let%test_unit "degenerate: empty player list yields no hammer and no crash" =
+  let g =
+    Game.create { Fixtures.mid_game with players = [] } ~role_map:Fixtures.role_map
+  in
+  [%test_result: string]
+    (sprintf
+       "num_players=%d proposer=%s hammer=%s"
+       g.num_players
+       (Option.value g.current_proposer ~default:"-")
+       (Option.value g.hammer ~default:"-"))
+    ~expect:"num_players=0 proposer=ALICE hammer=-"
+;;
+
+let%test_unit "degenerate: proposer not in the player list yields no hammer and no crash" =
+  let m0 : Types.mission =
+    { state = M_pending
+    ; team = []
+    ; team_size = 2
+    ; fails_required = 1
+    ; num_fails = 0
+    ; proposals = [ Fixtures.pending "ZED" ]
+    }
+  in
+  let g =
+    Game.create
+      { Fixtures.mid_game with missions = m0 :: List.tl_exn Fixtures.mid_game.missions }
+      ~role_map:Fixtures.role_map
+  in
+  [%test_result: string]
+    (sprintf
+       "proposer=%s hammer=%s"
+       (Option.value g.current_proposer ~default:"-")
+       (Option.value g.hammer ~default:"-"))
+    ~expect:"proposer=ZED hammer=-"
+;;
+
 let%test_unit "all missions resolved derives no current mission/proposer/hammer" =
   let s ~proposer team = Fixtures.success ~size:(List.length team) ~team ~proposer in
   let f proposer team : Types.mission =

@@ -32,6 +32,16 @@ let rejected (proposer : string) (team : string list) : proposal =
   { proposer; team; votes = []; state = Rejected }
 ;;
 
+(* like [approved]/[rejected] but with explicit approval votes, for games whose player
+   list is not the 5-player [players] (or for rejected proposals that still had voters). *)
+let approved_by (votes : string list) (proposer : string) (team : string list) : proposal =
+  { proposer; team; votes; state = Approved }
+;;
+
+let rejected_by (votes : string list) (proposer : string) (team : string list) : proposal =
+  { proposer; team; votes; state = Rejected }
+;;
+
 let all_true (team : string list) : bool String.Map.t =
   String.Map.of_alist_exn (List.map team ~f:(fun n -> n, true))
 ;;
@@ -54,6 +64,12 @@ let pending_mission ~size : mission =
   ; num_fails = 0
   ; proposals = []
   }
+;;
+
+let make_mission ?(fails_required = 1) ?(num_fails = 0) ~state ~size ~team ~proposals ()
+  : mission
+  =
+  { state; team; team_size = size; fails_required; num_fails; proposals }
 ;;
 
 (* A completed good win in which evil was never sent on a mission (good teams only). *)
@@ -179,6 +195,116 @@ let psychic_tie : game_data =
         }
   ; in_game_log = false
   }
+;;
+
+(* ----- 7-player fixtures (3 evil, mission 4 requires TWO fails) ----- *)
+
+let seven_players = [ "ALICE"; "BOB"; "CARL"; "DAVE"; "EVE"; "FRAN"; "GREG" ]
+
+let seven_roles_assignment : role_assignment list =
+  [ { name = "ALICE"; role = "MERLIN"; assassin = false }
+  ; { name = "BOB"; role = "PERCIVAL"; assassin = false }
+  ; { name = "CARL"; role = "LOYAL FOLLOWER"; assassin = false }
+  ; { name = "DAVE"; role = "MORGANA"; assassin = false }
+  ; { name = "EVE"; role = "ASSASSIN"; assassin = true }
+  ; { name = "FRAN"; role = "LOYAL FOLLOWER"; assassin = false }
+  ; { name = "GREG"; role = "MORDRED"; assassin = false }
+  ]
+;;
+
+let seven_role_names =
+  [ "MERLIN"
+  ; "PERCIVAL"
+  ; "LOYAL FOLLOWER"
+  ; "MORGANA"
+  ; "ASSASSIN"
+  ; "LOYAL FOLLOWER"
+  ; "MORDRED"
+  ]
+;;
+
+(* A completed 7-player game with the given missions; badge detectors only read
+   [outcome.state], [outcome.roles], and [outcome.assassinated], so [votes] stays empty. *)
+let seven_game ~(missions : mission list) ~(outcome_state : outcome_state) : game_data =
+  { state = Game_ended
+  ; phase = Assassination
+  ; players = seven_players
+  ; roles = seven_role_names
+  ; missions
+  ; outcome =
+      Some
+        { state = outcome_state
+        ; message = "Game over"
+        ; assassinated = None
+        ; roles = seven_roles_assignment
+        ; votes = []
+        }
+  ; in_game_log = false
+  }
+;;
+
+(* 7-player mission ladder (sizes 2,3,3,4,4) where mission 4 requires TWO fails. Good wins
+   3-2. On mission 4 all three evil players (DAVE, EVE, GREG) went together and produced
+   exactly the two required fails — perfect coordination, not over-failing. *)
+let seven_two_fail : game_data =
+  let m1 =
+    make_mission
+      ~state:Success
+      ~size:2
+      ~team:[ "ALICE"; "BOB" ]
+      ~proposals:
+        [ approved_by [ "ALICE"; "BOB"; "CARL"; "DAVE" ] "ALICE" [ "ALICE"; "BOB" ] ]
+      ()
+  in
+  let m2 =
+    make_mission
+      ~state:Fail
+      ~num_fails:1
+      ~size:3
+      ~team:[ "BOB"; "CARL"; "DAVE" ]
+      ~proposals:
+        [ approved_by [ "BOB"; "CARL"; "DAVE"; "EVE" ] "BOB" [ "BOB"; "CARL"; "DAVE" ] ]
+      ()
+  in
+  let m3 =
+    make_mission
+      ~state:Success
+      ~size:3
+      ~team:[ "ALICE"; "BOB"; "FRAN" ]
+      ~proposals:
+        [ approved_by [ "ALICE"; "BOB"; "CARL"; "FRAN" ] "CARL" [ "ALICE"; "BOB"; "FRAN" ]
+        ]
+      ()
+  in
+  let m4 =
+    make_mission
+      ~state:Fail
+      ~fails_required:2
+      ~num_fails:2
+      ~size:4
+      ~team:[ "ALICE"; "DAVE"; "EVE"; "GREG" ]
+      ~proposals:
+        [ approved_by
+            [ "DAVE"; "EVE"; "GREG"; "ALICE" ]
+            "DAVE"
+            [ "ALICE"; "DAVE"; "EVE"; "GREG" ]
+        ]
+      ()
+  in
+  let m5 =
+    make_mission
+      ~state:Success
+      ~size:4
+      ~team:[ "ALICE"; "BOB"; "CARL"; "FRAN" ]
+      ~proposals:
+        [ approved_by
+            [ "ALICE"; "BOB"; "CARL"; "FRAN" ]
+            "EVE"
+            [ "ALICE"; "BOB"; "CARL"; "FRAN" ]
+        ]
+      ()
+  in
+  seven_game ~missions:[ m1; m2; m3; m4; m5 ] ~outcome_state:Good_win
 ;;
 
 (* An in-progress game: mission 1, first proposal pending, proposed by ALICE. *)
