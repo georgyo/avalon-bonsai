@@ -15,7 +15,9 @@ let achievements (g : Game.t) =
   match Game.outcome g with
   | Some o when not (equal_outcome_state o.state Canceled) ->
     let badges =
-      Analysis.get_badges (Analysis.create g.data ~role_map:Avalonlib.role_map)
+      match Analysis.create g.data ~role_map:Avalonlib.role_map with
+      | Some analysis -> Analysis.get_badges analysis
+      | None -> []
     in
     if List.is_empty badges
     then N.none

@@ -73,13 +73,14 @@ let create (data : game_data) ~role_map : t =
       let hammer =
         match current_proposal, current_proposer with
         | Some _, Some proposer ->
-          let proposer_idx =
-            match List.findi data.players ~f:(fun _ p -> String.equal p proposer) with
-            | Some (i, _) -> i
-            | None -> -1
-          in
-          let hammer_idx = (proposer_idx + (4 - pending_idx)) % num_players in
-          List.nth data.players hammer_idx
+          (* No hammer in the degenerate cases: an empty player list (the modulo below
+             would raise) or a proposer who is not in the player list (index -1 would
+             yield a plausible-looking but wrong hammer). *)
+          (match List.findi data.players ~f:(fun _ p -> String.equal p proposer) with
+           | None -> None
+           | Some (proposer_idx, _) ->
+             let hammer_idx = (proposer_idx + (4 - pending_idx)) % num_players in
+             List.nth data.players hammer_idx)
         | _ -> None
       in
       { data

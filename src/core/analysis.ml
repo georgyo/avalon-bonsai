@@ -3,7 +3,7 @@ open Types
 open Util
 
 (** Port of client/src/avalon-analysis.ts: post-game achievement ("badge") detection.
-    Constructed only for completed, non-canceled games. *)
+    [create] returns [None] for games without an outcome. *)
 
 type badge =
   { title : string
@@ -24,6 +24,7 @@ type t =
   ; evil_set : String.Set.t
   ; good_players : string list
   ; missions : mission_ex list
+  ; completed_missions : mission_ex list
   }
 
 let str_eq = String.equal
@@ -47,49 +48,56 @@ let initial l =
   | _ :: t -> List.rev t
 ;;
 
-let create (game : game_data) ~(role_map : role String.Map.t) : t =
-  let outcome = Option.value_exn game.outcome in
-  let team_of_role role =
-    match Map.find role_map role with
-    | Some r -> Some r.team
-    | None -> None
-  in
-  let roles_by_name =
-    String.Map.of_alist_reduce
-      (List.map outcome.roles ~f:(fun ra -> ra.name, ra))
-      ~f:(fun _ b -> b)
-  in
-  (* invert(mapValues(rolesByName, r => r.role)); later entries win (lossy). *)
-  let names_by_role =
-    List.fold outcome.roles ~init:String.Map.empty ~f:(fun acc ra ->
-      Map.set acc ~key:ra.role ~data:ra.name)
-  in
-  let evil_players =
-    List.filter_map outcome.roles ~f:(fun ra ->
-      match team_of_role ra.role with
-      | Some Evil -> Some ra.name
-      | _ -> None)
-  in
-  let good_players =
-    List.filter_map outcome.roles ~f:(fun ra ->
-      match team_of_role ra.role with
-      | Some Good -> Some ra.name
-      | _ -> None)
-  in
-  let evil_set = String.Set.of_list evil_players in
-  let missions =
-    List.map game.missions ~f:(fun m ->
-      { m; evil_on_team = List.filter m.team ~f:(fun n -> Set.mem evil_set n) })
-  in
-  { game
-  ; outcome
-  ; roles_by_name
-  ; names_by_role
-  ; evil_players
-  ; evil_set
-  ; good_players
-  ; missions
-  }
+let create (game : game_data) ~(role_map : role String.Map.t) : t option =
+  match game.outcome with
+  | None -> None
+  | Some outcome ->
+    let team_of_role role =
+      match Map.find role_map role with
+      | Some r -> Some r.team
+      | None -> None
+    in
+    let roles_by_name =
+      String.Map.of_alist_reduce
+        (List.map outcome.roles ~f:(fun ra -> ra.name, ra))
+        ~f:(fun _ b -> b)
+    in
+    (* invert(mapValues(rolesByName, r => r.role)); later entries win (lossy). *)
+    let names_by_role =
+      List.fold outcome.roles ~init:String.Map.empty ~f:(fun acc ra ->
+        Map.set acc ~key:ra.role ~data:ra.name)
+    in
+    let evil_players =
+      List.filter_map outcome.roles ~f:(fun ra ->
+        match team_of_role ra.role with
+        | Some Evil -> Some ra.name
+        | _ -> None)
+    in
+    let good_players =
+      List.filter_map outcome.roles ~f:(fun ra ->
+        match team_of_role ra.role with
+        | Some Good -> Some ra.name
+        | _ -> None)
+    in
+    let evil_set = String.Set.of_list evil_players in
+    let missions =
+      List.map game.missions ~f:(fun m ->
+        { m; evil_on_team = List.filter m.team ~f:(fun n -> Set.mem evil_set n) })
+    in
+    let completed_missions =
+      List.filter missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
+    in
+    Some
+      { game
+      ; outcome
+      ; roles_by_name
+      ; names_by_role
+      ; evil_players
+      ; evil_set
+      ; good_players
+      ; missions
+      ; completed_missions
+      }
 ;;
 
 let name_of_role t role = Map.find t.names_by_role role
@@ -135,16 +143,24 @@ let merlin_sends_evil_team t =
   | None -> None
   | Some merlin ->
     List.find_map t.missions ~f:(fun me ->
+      (* Deliberate divergence from the original JS, which counts Mordred here but
+         excludes him in the sibling merlin_proposes_evil_team badge. Merlin cannot see
+         Mordred (see avalonlib.ml), so he must not count as evil Merlin knowingly sent. *)
+      let visible_evil =
+        List.filter me.evil_on_team ~f:(fun pl ->
+          match Map.find t.roles_by_name pl with
+          | Some ra -> not (str_eq ra.role "MORDRED")
+          | None -> true)
+      in
       match
         List.find me.m.proposals ~f:(fun p -> equal_proposal_state p.state Approved)
       with
       | Some ap
-        when str_eq merlin ap.proposer
-             && List.length me.evil_on_team >= me.m.fails_required ->
+        when str_eq merlin ap.proposer && List.length visible_evil >= me.m.fails_required
+        ->
         Some
           { title = "Traitor Merlin"
-          ; body =
-              sprintf "Merlin sent an evil team with %s" (join_with_and me.evil_on_team)
+          ; body = sprintf "Merlin sent an evil team with %s" (join_with_and visible_evil)
           }
       | _ -> None)
 ;;
@@ -326,9 +342,13 @@ let playing_the_long_con t =
 ;;
 
 let universal_acclaim t =
+  (* Deliberate divergence from the original JS, which only scanned all but the last
+     proposal of each mission. A unanimous proposal is always the approved, last one (the
+     server appends a new proposal only after a rejection), so the JS badge was dead code.
+     Scan ALL proposals instead. *)
   let num_players = List.length t.game.players in
   List.find_mapi t.missions ~f:(fun idx me ->
-    List.find_map (initial me.m.proposals) ~f:(fun p ->
+    List.find_map me.m.proposals ~f:(fun p ->
       if List.length p.votes = num_players
       then
         Some
@@ -424,9 +444,7 @@ let same_team t =
 ;;
 
 let player_doesnt_go_on_missions t =
-  let completed =
-    List.filter t.missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
-  in
+  let completed = t.completed_missions in
   if List.is_empty completed
   then None
   else (
@@ -465,10 +483,10 @@ let almost_lost t =
     let num_fails = ref 0 in
     List.find_mapi t.missions ~f:(fun idx me ->
       let result =
-        if !num_fails = 2 && List.length me.m.proposals < 5
-        then (
+        match List.last me.m.proposals with
+        | Some last_p when !num_fails = 2 && List.length me.m.proposals < 5 ->
           let num_behind = 5 - List.length me.m.proposals in
-          let proposer = ref (List.last_exn me.m.proposals).proposer in
+          let proposer = ref last_p.proposer in
           let players_behind = ref [] in
           for _ = 0 to num_behind - 1 do
             let pidx = player_index !proposer in
@@ -484,8 +502,8 @@ let almost_lost t =
                     "Good came close to losing on mission %d when evil team had hammer"
                     (idx + 1)
               }
-          else None)
-        else None
+          else None
+        | Some _ | None -> None
       in
       if equal_mission_state me.m.state Fail then incr num_fails;
       result))
@@ -603,9 +621,7 @@ let oberon_gambit t =
 ;;
 
 let evil_everywhere t =
-  let completed =
-    List.filter t.missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
-  in
+  let completed = t.completed_missions in
   if List.length completed >= 3
      && List.for_all completed ~f:(fun me -> not (List.is_empty me.evil_on_team))
   then
@@ -676,9 +692,7 @@ let one_man_army t =
 ;;
 
 let evil_ghost t =
-  let completed =
-    List.filter t.missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
-  in
+  let completed = t.completed_missions in
   if List.length completed < 3
   then None
   else
@@ -744,9 +758,7 @@ let rejection_streak t =
 ;;
 
 let big_team_betrayal t =
-  let completed =
-    List.filter t.missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
-  in
+  let completed = t.completed_missions in
   if List.length completed < 3
   then None
   else (
@@ -845,9 +857,7 @@ let oberon_saboteur t =
 ;;
 
 let all_aboard t =
-  let completed =
-    List.filter t.missions ~f:(fun me -> not (equal_mission_state me.m.state M_pending))
-  in
+  let completed = t.completed_missions in
   if List.length completed < 3
   then None
   else (
@@ -860,13 +870,8 @@ let all_aboard t =
 ;;
 
 let flip_flopper t =
-  List.find_map t.missions ~f:(fun me ->
+  List.find_mapi t.missions ~f:(fun mission_idx me ->
     let n = List.length me.m.proposals in
-    let mission_idx =
-      List.findi t.missions ~f:(fun _ x -> phys_equal x me)
-      |> Option.map ~f:fst
-      |> Option.value ~default:0
-    in
     With_return.with_return (fun { return } ->
       for i = 1 to n - 1 do
         let current = List.nth_exn me.m.proposals i in
