@@ -479,14 +479,14 @@ let subscribe_from_response json ~on_ok ~on_err =
     on_ok ())
 ;;
 
-let create_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name () =
+let create_lobby ?(on_ok = noop_ok) ?(on_err = toast_err) ~name () =
   Api.create_lobby
     ~name
     ~on_ok:(fun json -> subscribe_from_response json ~on_ok ~on_err)
     ~on_err
 ;;
 
-let join_lobby ?(on_ok = noop_ok) ?(on_err = noop_err) ~name ~lobby () =
+let join_lobby ?(on_ok = noop_ok) ?(on_err = toast_err) ~name ~lobby () =
   Api.join_lobby
     ~name
     ~lobby
@@ -515,22 +515,28 @@ let cancel_game ?(on_ok = noop_ok) ?(on_err = toast_err) () =
     ()
 ;;
 
-let vote_team ?(on_ok = noop_ok) ?(on_err = toast_err) vote =
+(* The in-game actions (vote_team / propose_team / do_mission) all target the current
+   game's mission and proposal indices in the current lobby; [with_game] extracts those
+   and applies [f]. When there is no current game — e.g. a stale click racing the game-end
+   snapshot — the action is deliberately a silent no-op: there is nothing valid to send
+   and nothing useful to tell the user. *)
+let with_game f =
   match cur_game () with
   | None -> ()
   | Some g ->
-    Api.vote_team
+    f
       ~lobby:(lobby_name ())
       ~name:(user_name_str ())
       ~mission:g.current_mission_idx
       ~proposal:g.current_proposal_idx
-      ~vote
-      ~on_ok:(fun _ -> on_ok ())
-      ~on_err
       ()
 ;;
 
-let start_game ?(on_ok = noop_ok) ?(on_err = noop_err) ~in_game_log () =
+let vote_team ?(on_ok = noop_ok) ?(on_err = toast_err) vote =
+  with_game (Api.vote_team ~vote ~on_ok:(fun _ -> on_ok ()) ~on_err)
+;;
+
+let start_game ?(on_ok = noop_ok) ?(on_err = toast_err) ~in_game_log () =
   let m = model () in
   Api.start_game
     ~lobby:(lobby_name ())
@@ -542,37 +548,15 @@ let start_game ?(on_ok = noop_ok) ?(on_err = noop_err) ~in_game_log () =
     ()
 ;;
 
-let propose_team ?(on_ok = noop_ok) ?(on_err = noop_err) team =
-  match cur_game () with
-  | None -> ()
-  | Some g ->
-    Api.propose_team
-      ~lobby:(lobby_name ())
-      ~name:(user_name_str ())
-      ~mission:g.current_mission_idx
-      ~proposal:g.current_proposal_idx
-      ~team
-      ~on_ok:(fun _ -> on_ok ())
-      ~on_err
-      ()
+let propose_team ?(on_ok = noop_ok) ?(on_err = toast_err) team =
+  with_game (Api.propose_team ~team ~on_ok:(fun _ -> on_ok ()) ~on_err)
 ;;
 
-let do_mission ?(on_ok = noop_ok) ?(on_err = noop_err) vote =
-  match cur_game () with
-  | None -> ()
-  | Some g ->
-    Api.do_mission
-      ~lobby:(lobby_name ())
-      ~name:(user_name_str ())
-      ~mission:g.current_mission_idx
-      ~proposal:g.current_proposal_idx
-      ~vote
-      ~on_ok:(fun _ -> on_ok ())
-      ~on_err
-      ()
+let do_mission ?(on_ok = noop_ok) ?(on_err = toast_err) vote =
+  with_game (Api.do_mission ~vote ~on_ok:(fun _ -> on_ok ()) ~on_err)
 ;;
 
-let assassinate ?(on_ok = noop_ok) ?(on_err = noop_err) target =
+let assassinate ?(on_ok = noop_ok) ?(on_err = toast_err) target =
   Api.assassinate
     ~lobby:(lobby_name ())
     ~name:(user_name_str ())
@@ -590,50 +574,6 @@ let logout () =
 
 let sign_in_anonymously ?(on_err = noop_err) () =
   Firebase.sign_in_anonymously ~on_err:(fun e -> on_err (Firebase.error_message e))
-;;
-
-let email_regexp = Regexp.regexp "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
-let email_regex_ok email = Option.is_some (Regexp.string_match email_regexp email 0)
-let whitelist = [ "gmail.com"; "yahoo.com"; "outlook.com"; "hotmail.com"; "live.com" ]
-
-let send_sign_in_link ~email ~on_ok ~on_err =
-  let hostname = Ffi.window_origin () ^ "/" in
-  (* Percent-encode only the email value: [encodeURI] leaves [+] alone, and the URL param
-     decoder on the return trip turns [+] into a space, breaking addresses like
-     alice+x@gmail.com. *)
-  let encoded_email = Js.to_string (Js.encodeURIComponent (Js.string email)) in
-  let url = hostname ^ "?confirmEmail=" ^ encoded_email in
-  let settings = { Firebase.url; handle_code_in_app = true } in
-  Firebase.send_sign_in_link_to_email ~email ~settings ~on_ok ~on_err:(fun e ->
-    on_err (Firebase.error_message e))
-;;
-
-let submit_email_addr ?(on_ok = noop_ok) ?(on_err = noop_err) email =
-  if not (email_regex_ok email)
-  then on_err "Not a valid email address"
-  else (
-    let domain =
-      match String.split email ~on:'@' with
-      | _ :: d :: _ -> d
-      | _ -> ""
-    in
-    let proceed () = send_sign_in_link ~email ~on_ok ~on_err in
-    if List.mem whitelist domain ~equal:String.equal
-    then proceed ()
-    else
-      Ffi.fetch
-        ("https://api.mailcheck.ai/domain/" ^ domain)
-        ~on_err:(fun _ -> on_err "Cannot verify email. Try again later")
-        ~on_ok:(fun resp ->
-          Ffi.promise_then
-            (Js.Unsafe.meth_call resp "json" [||])
-            ~on_err:(fun _ -> on_err "Cannot verify email. Try again later")
-            ~on_ok:(fun data ->
-              let mx = Ffi.field_bool data "mx" in
-              let disposable = Ffi.field_bool data "disposable" in
-              if mx && not disposable
-              then proceed ()
-              else on_err "This email address appears to be invalid or disposable")))
 ;;
 
 (* ---- UI-only state setters ---- *)

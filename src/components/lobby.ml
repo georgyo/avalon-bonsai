@@ -315,7 +315,9 @@ let game_lobby (local_ graph) =
       State.start_game
         ~in_game_log
         ~on_ok:(fun () -> run (set_starting false))
-        ~on_err:(fun _ -> run (set_starting false))
+        ~on_err:(fun e ->
+          Toast.show e;
+          run (set_starting false))
         ())
   in
   let seating_hint =

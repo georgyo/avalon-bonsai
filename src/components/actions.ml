@@ -61,7 +61,9 @@ let team_proposal_action ~selected (local_ graph) =
     let propose =
       eff (fun () ->
         run (set_proposing true);
-        State.propose_team selected ~on_err:(fun _ -> run (set_proposing false)))
+        State.propose_team selected ~on_err:(fun e ->
+          Toast.show e;
+          run (set_proposing false)))
     in
     let body =
       if Option.value_map g.current_proposer ~default:false ~f:(String.equal me)
@@ -124,7 +126,9 @@ let team_vote_action (local_ graph) =
         (* set the flag optimistically at click time so both buttons disable immediately;
            a failed vote re-enables them *)
         run (set_voted (Some v));
-        State.vote_team v ~on_err:(fun _ -> run (set_voted None)))
+        State.vote_team v ~on_err:(fun e ->
+          Toast.show e;
+          run (set_voted None)))
     in
     let voted_yes = Option.value_map voted ~default:false ~f:Fn.id in
     let voted_no = Option.value_map voted ~default:false ~f:not in
@@ -207,9 +211,9 @@ let mission_action (local_ graph) =
       eff (fun () ->
         run (set_done true);
         run (set_error "");
-        State.do_mission v ~on_err:(fun _ ->
+        State.do_mission v ~on_err:(fun e ->
           run (set_done false);
-          run (set_error "Vote failed, please try again")))
+          run (set_error e)))
     in
     let body =
       if needs_to_vote
@@ -273,7 +277,9 @@ let assassination_action ~selected (local_ graph) =
         match target with
         | Some t ->
           run (set_assassinating true);
-          State.assassinate t ~on_err:(fun _ -> run (set_assassinating false))
+          State.assassinate t ~on_err:(fun e ->
+            Toast.show e;
+            run (set_assassinating false))
         | None -> ())
     in
     let body =

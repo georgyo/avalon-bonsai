@@ -61,7 +61,9 @@ val value : unit -> Model.t Bonsai.t
 (** Wire up Firebase auth + initial listeners. Call once at startup. *)
 val init : unit -> unit
 
-(* actions invoked by the UI; [on_ok]/[on_err] default to no-ops *)
+(* Actions invoked by the UI. [on_ok] defaults to a no-op; [on_err] defaults to showing
+   the server's message as a toast (except [sign_in_anonymously], whose caller renders the
+   error inline). *)
 val create_lobby
   :  ?on_ok:(unit -> unit)
   -> ?on_err:(string -> unit)
@@ -99,13 +101,6 @@ val do_mission : ?on_ok:(unit -> unit) -> ?on_err:(string -> unit) -> bool -> un
 val assassinate : ?on_ok:(unit -> unit) -> ?on_err:(string -> unit) -> string -> unit
 val logout : unit -> unit
 val sign_in_anonymously : ?on_err:(string -> unit) -> unit -> unit
-
-val submit_email_addr
-  :  ?on_ok:(unit -> unit)
-  -> ?on_err:(string -> unit)
-  -> string
-  -> unit
-
 val toggle_role : name:string -> selected:bool -> unit
 val set_modal : Model.modal -> unit
 val set_show_role_sheet : bool -> unit

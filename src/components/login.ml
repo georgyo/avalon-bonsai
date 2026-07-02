@@ -42,7 +42,7 @@ let user_login (local_ graph) =
     eff (fun () ->
       run (set_submitting true);
       run (set_error "");
-      State.submit_email_addr
+      Email_auth.submit_email_addr
         email
         ~on_ok:(fun () ->
           run (set_submitted true);
