@@ -11,7 +11,9 @@
 // it: `npm install && npm run build`.
 import { initializeApp } from "firebase/app";
 import {
-  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
   onAuthStateChanged,
   signInAnonymously,
   signInWithEmailLink,
@@ -19,6 +21,24 @@ import {
   signOut,
 } from "firebase/auth";
 import { getFirestore, doc, onSnapshot, getDoc } from "firebase/firestore";
+
+// The app only uses anonymous + email-link sign-in, so use initializeAuth with
+// popupRedirectResolver undefined instead of getAuth: tree-shakes the popup/redirect
+// and reCAPTCHA machinery out of the bundle. Exposed under the name "getAuth" with
+// the same (app) -> Auth signature so the OCaml bindings need no changes; lazily
+// initializes once per app and returns the cached instance thereafter.
+const authByApp = new Map();
+function getAuth(app) {
+  let auth = authByApp.get(app);
+  if (auth === undefined) {
+    auth = initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: undefined,
+    });
+    authByApp.set(app, auth);
+  }
+  return auth;
+}
 
 globalThis.__fb = {
   initializeApp,
