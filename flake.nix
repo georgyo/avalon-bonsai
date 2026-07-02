@@ -43,9 +43,10 @@
       oxcaml-opam,
       oxcaml-opam-dev,
     }:
-    # Only x86_64-linux is verified. The OxCaml toolchain is linux-oriented; aarch64-linux
-    # likely works but is untested, and darwin would need separate work — add systems here
-    # once verified.
+    # x86_64-linux is the verified system. aarch64-linux is declared but not yet
+    # CI-verified (CI only builds x86_64-linux; a second cold OxCaml build would not fit
+    # the GitHub Actions cache). darwin would need separate work — add systems here once
+    # verified.
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
       system:
       let
@@ -83,14 +84,22 @@
         # solver once locally and commit its output (package-defs.json). CI then reads that file
         # via materializedDefsToScope and never runs the solver at all. Regenerate with:
         #   nix build .#materialize && cp -L result package-defs.json   (add --impure if needed)
-        materialize = on.materialize {
-          inherit repos;
-          regenCommand = [
-            "nix"
-            "build"
-            ".#materialize"
-          ];
-        } query;
+        #
+        # Only defined on x86_64-linux: evaluating it runs the opam solver via
+        # import-from-derivation (exactly what materialization exists to avoid), and the
+        # aarch64-linux variant cannot even build on an x86_64 host.
+        materialize =
+          if system == "x86_64-linux" then
+            on.materialize {
+              inherit repos;
+              regenCommand = [
+                "nix"
+                "build"
+                ".#materialize"
+              ];
+            } query
+          else
+            null;
 
         scope = (on.materializedDefsToScope { } ./package-defs.json).overrideScope overlay;
 
@@ -160,25 +169,31 @@
             runHook postCheck
           '';
 
-          # The product is the static client bundle (the JS, its index.html, and the web
-          # assets it loads).
+          # The product is the static client bundle: the JS plus everything in web/
+          # (index.html today — bin/index.html is copied from web/index.html by a dune
+          # rule — and any assets added later).
           installPhase = ''
             runHook preInstall
             mkdir -p $out
             cp _build/default/bin/main.bc.js $out/main.bc.js
-            cp _build/default/bin/index.html $out/index.html
+            cp -r web/. $out/
             runHook postInstall
           '';
         };
       in
       {
-        packages.default = avalon-bonsai;
-        packages.avalon-bonsai = avalon-bonsai;
-
-        # `nix build .#materialize && cp -L result package-defs.json` regenerates the committed
-        # resolution (e.g. after bumping the opam repo inputs). This is the only step that runs
-        # opam's solver; the normal build never does.
-        packages.materialize = pkgs.runCommand "package-defs.json" { } "cp ${materialize} $out";
+        packages = {
+          default = avalon-bonsai;
+          avalon-bonsai = avalon-bonsai;
+        }
+        # `nix build .#materialize && cp -L result package-defs.json` regenerates the
+        # committed resolution (e.g. after bumping the opam repo inputs). This is the only
+        # step that runs opam's solver; the normal build never does. x86_64-linux only —
+        # see the `materialize` binding above. After regenerating, also run
+        # scripts/update-package-defs-lock.sh so CI's staleness check passes.
+        // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          materialize = pkgs.runCommand "package-defs.json" { } "cp ${materialize} $out";
+        };
 
         # `nix flake check` builds the bundle and runs the unit tests.
         checks.default = avalon-bonsai;

@@ -59,13 +59,25 @@ nix develop           # dev shell with the toolchain
 ```
 
 The opam solver's resolution is materialized into the committed `package-defs.json`. After
-bumping flake inputs, regenerate it:
+bumping flake inputs, regenerate it, and also refresh `package-defs.lock` (the marker CI
+uses to detect a flake update without a re-materialization):
 
 ```
 nix build .#materialize && cp -L result package-defs.json
+./scripts/update-package-defs-lock.sh
 ```
 
-CI (`.github/workflows/nix.yml`) builds the flake.
+CI (`.github/workflows/nix.yml`) builds the flake, after fast drift checks (vendored
+Firebase shim, `package-defs.lock`) and a `nix fmt` no-op check.
+
+Notes on the flake:
+
+- The nix devShell intentionally does **not** include `ocamlformat` or `ocaml-lsp`: they
+  would require re-materializing the resolution with OxCaml-patched versions. Use the
+  opam switch for those tools.
+- `aarch64-linux` is declared in the flake but not built in CI — a second cold OxCaml
+  build would not fit the 10 GB Actions cache. Use an arm runner plus a real binary cache
+  (e.g. Cachix) if needed.
 
 ## Test
 

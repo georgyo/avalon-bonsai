@@ -16,6 +16,9 @@ dune runtest                    # offline unit tests (test/)
 dune build --profile release bin/main.bc.js
 ```
 
+For a hermetic build (and what CI uses), the Nix flake wraps the same opam resolution via
+opam-nix: `nix build .#default` (see the README's "Building with Nix" section).
+
 ## Why `dune pkg lock` fails
 
 The tutorial's `dune-workspace` is correct in form. The blocker is in how the
