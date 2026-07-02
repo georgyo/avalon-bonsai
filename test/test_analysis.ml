@@ -380,8 +380,10 @@ let%test_unit "Playing the long con is not awarded on a two-fail mission" =
 
 (* On the two-fail mission 4, BOB's approved team carries one evil player (GREG) — not
    enough to fail it, so it still counts as a perfect proposal and BOB reaches the
-   two-good-proposals threshold. ALICE's rejected mission-4 team carried two evil players
-   (>= fails_required), which counts as a bad proposal and disqualifies her. *)
+   two-good-proposals threshold. ALICE proposed two all-good teams earlier, but her
+   rejected mission-4 team carried two evil players (>= fails_required), which counts as a
+   bad proposal and disqualifies her; if that boundary were wrong (evil_count <=
+   fails_required counting as good) she would win with three perfect teams instead. *)
 let%test_unit "Actual Merlin: one evil on a two-fail mission is still a perfect team" =
   let t =
     analyze
@@ -393,14 +395,17 @@ let%test_unit "Actual Merlin: one evil on a two-fail mission is still a perfect 
                ~size:2
                ~team:[ "ALICE"; "BOB" ]
                ~proposals:
-                 [ Fixtures.approved_by [ "ALICE"; "BOB" ] "BOB" [ "ALICE"; "BOB" ] ]
+                 [ Fixtures.rejected "ALICE" [ "ALICE"; "CARL" ]
+                 ; Fixtures.approved_by [ "ALICE"; "BOB" ] "BOB" [ "ALICE"; "BOB" ]
+                 ]
                ()
            ; Fixtures.make_mission
                ~state:Success
                ~size:3
                ~team:[ "ALICE"; "BOB"; "CARL" ]
                ~proposals:
-                 [ Fixtures.approved_by
+                 [ Fixtures.rejected "ALICE" [ "ALICE"; "BOB"; "FRAN" ]
+                 ; Fixtures.approved_by
                      [ "ALICE"; "BOB"; "CARL" ]
                      "CARL"
                      [ "ALICE"; "BOB"; "CARL" ]
