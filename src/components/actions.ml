@@ -120,7 +120,11 @@ let team_vote_action (local_ graph) =
        catches up), so a double-click can't submit the vote twice *)
     let disabled = already || Option.is_some voted in
     let vote v =
-      eff (fun () -> State.vote_team v ~on_ok:(fun () -> run (set_voted (Some v))))
+      eff (fun () ->
+        (* set the flag optimistically at click time so both buttons disable immediately;
+           a failed vote re-enables them *)
+        run (set_voted (Some v));
+        State.vote_team v ~on_err:(fun _ -> run (set_voted None)))
     in
     let voted_yes = Option.value_map voted ~default:false ~f:Fn.id in
     let voted_no = Option.value_map voted ~default:false ~f:not in
