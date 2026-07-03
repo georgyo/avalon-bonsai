@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
-      - uses: hannesg/ordinary-nix-cache@v0.1.1
+      - uses: georgyo/ordinary-nix-cache@main
 
 
       - name: Check Nix formatting (nix fmt must be a no-op)
