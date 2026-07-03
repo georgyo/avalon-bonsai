@@ -43,6 +43,7 @@ let user_login (local_ graph) =
       run (set_submitting true);
       run (set_error "");
       Email_auth.submit_email_addr
+        ~auth:(State.auth ())
         email
         ~on_ok:(fun () ->
           run (set_submitted true);

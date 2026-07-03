@@ -1,6 +1,8 @@
 (library
  (name firebase)
- (libraries core js_of_ocaml)
+ ; Deliberately Core-free: these are thin JS bindings, and staying on Stdlib keeps the
+ ; module namespace clean (Core would shadow this library's Error module).
+ (libraries js_of_ocaml)
  (flags
   (:standard -w +70 -warn-error +70))
  ; Embed the vendored Firebase SDK bundle (built from shim/ to vendor/firebase-shim.js)

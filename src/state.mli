@@ -58,8 +58,14 @@ val model : unit -> Model.t
 (** The model as a Bonsai value driving the UI. *)
 val value : unit -> Model.t Bonsai.t
 
-(** Wire up Firebase auth + initial listeners. Call once at startup. *)
+(** Wire up Firebase auth + initial listeners. Call once at startup: initializes the
+    Firebase app and derives the Auth/Firestore service handles that all actions below
+    thread into the SDK. *)
 val init : unit -> unit
+
+(** The Auth service handle created by {!init}, for callers that talk to Firebase auth
+    directly (e.g. [Email_auth]). Raises if [init] has not run. *)
+val auth : unit -> Firebase.Auth.t
 
 (* Actions invoked by the UI. [on_ok] defaults to a no-op; [on_err] defaults to showing
    the server's message as a toast (except [sign_in_anonymously], whose caller renders the

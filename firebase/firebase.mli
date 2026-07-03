@@ -1,121 +1,33 @@
-open Js_of_ocaml
+(** Typed bindings to the Firebase v12 {e modular} JS SDK — one OCaml module per SDK entry
+    point, mirroring the upstream API surface
+    ({:https://firebase.google.com/docs/reference/js}):
 
-(** Typed bindings to the Firebase v12 modular JS SDK. The SDK is a vendored bundle (built
-    from [shim/] to [vendor/firebase-shim.js]) embedded ahead of the OCaml code in the
-    page bundle; it runs at startup and exposes its exports on [globalThis.__fb].
+    - {!App} — [firebase/app]: [initializeApp] and the {!App.t} handle.
+    - {!Auth} — [firebase/auth]: the {!Auth.t} service handle, the sign-in/sign-out entry
+      points, and {!Auth.User}.
+    - {!Firestore} — [firebase/firestore]: the {!Firestore.t} service handle, document
+      references, snapshots, and listeners.
+    - {!Error} — [FirebaseError], the rejection value of a failed SDK promise.
 
-    The handle types below are abstract and distinct, modeled on the [@firebase/auth] and
-    [@firebase/firestore] TypeScript definitions, so the type checker rejects mixing them
-    up and callers read JS objects only through the typed accessors here. Wrap setup in
-    {!on_ready}, which snapshots [globalThis.__fb] before running its callback. *)
+    As upstream, there are no module-level singletons here: {!App.initialize_app} returns
+    an {!App.t}, the per-service handles are derived from it ({!Auth.get_auth},
+    {!Firestore.get_firestore}), and every call takes its handle as the first argument.
+    The handle types are abstract and distinct, so the type checker rejects mixing them
+    up, and JS objects are read only through the typed accessors — never via raw
+    [Js.Unsafe] in callers.
 
-(** [User] — an authenticated user. *)
-type user
+    The SDK itself is a vendored bundle (built from [shim/] to [vendor/firebase-shim.js])
+    embedded ahead of the OCaml code in the page bundle; it runs at startup and exposes
+    its exports on [globalThis.__fb]. Wrap setup in {!on_ready}, which snapshots that
+    global before running its callback. *)
 
-(** [DocumentReference] — a handle to a Firestore document location. *)
-type document_reference
-
-(** [DocumentSnapshot] — the contents of a document at a point in time. *)
-type document_snapshot
-
-(** [FirebaseError] — rejection value of a Firebase promise. *)
-type error
-
-(** [FirebaseOptions] passed to [initializeApp]. *)
-type config =
-  { api_key : string
-  ; auth_domain : string
-  ; database_url : string
-  ; project_id : string
-  ; storage_bucket : string
-  ; messaging_sender_id : string
-  ; app_id : string
-  }
-
-(** [ActionCodeSettings] for email-link sign-in. *)
-type action_code_settings =
-  { url : string
-  ; handle_code_in_app : bool
-  }
+module App = App
+module Auth = Auth
+module Error = Error
+module Firestore = Firestore
 
 (** Run [f] with the SDK available: the embedded bundle has already run by the time OCaml
     code executes, so this just snapshots [globalThis.__fb] and calls [f]. [on_error] runs
     if that global is missing (i.e. the bundle was not embedded or did not run — a build
     problem) so the caller can show an error instead of hanging. *)
 val on_ready : ?on_error:(unit -> unit) -> (unit -> unit) -> unit
-
-(** [initializeApp] the default app. Must run before any other call; do it in {!on_ready}. *)
-val init : config -> unit
-
-(* ---- auth ---- *)
-val current_user : unit -> user option
-
-(** Subscribe to auth-state changes; returns the unsubscribe thunk. *)
-val on_auth_state_changed : (user option -> unit) -> unit -> unit
-
-val sign_in_anonymously : on_err:(error -> unit) -> unit
-
-val sign_in_with_email_link
-  :  email:string
-  -> link:string
-  -> on_ok:(unit -> unit)
-  -> on_err:(error -> unit)
-  -> unit
-
-val send_sign_in_link_to_email
-  :  email:string
-  -> settings:action_code_settings
-  -> on_ok:(unit -> unit)
-  -> on_err:(error -> unit)
-  -> unit
-
-(** Sign out. [on_error] runs if the underlying [signOut] promise rejects (default logs
-    the error to the console) — otherwise a failed logout is invisible. *)
-val sign_out : ?on_error:(error -> unit) -> unit -> unit
-
-(* ---- user ---- *)
-val uid : user -> string
-val email : user -> string option
-val display_name : user -> string option
-
-val get_id_token
-  :  user
-  -> force_refresh:bool
-  -> on_ok:(string -> unit)
-  -> on_err:(error -> unit)
-  -> unit
-
-(* ---- firestore ---- *)
-
-(** A document reference at the given path segments, e.g. [doc ["lobbies"; name]]. *)
-val doc : string list -> document_reference
-
-(** Subscribe to realtime updates; returns the unsubscribe thunk. *)
-val on_snapshot
-  :  document_reference
-  -> on_next:(document_snapshot -> unit)
-  -> on_error:(error -> unit)
-  -> unit
-  -> unit
-
-val get_doc
-  :  document_reference
-  -> on_ok:(document_snapshot -> unit)
-  -> on_err:(error -> unit)
-  -> unit
-
-(* ---- document snapshot ---- *)
-val exists : document_snapshot -> bool
-
-(** The document's data as a raw JS object (for the avalon [Parse] module), or [None] if
-    it doesn't exist. *)
-val data : document_snapshot -> Js.Unsafe.any option
-
-(* ---- error ---- *)
-
-(** The rejection value's [message] field; for non-FirebaseError rejections (e.g. a plain
-    string) falls back to a [String()] coercion, and to ["unknown error"] as a last resort
-    — never the empty string for a non-empty rejection. *)
-val error_message : error -> string
-
-val error_code : error -> string

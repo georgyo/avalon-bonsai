@@ -8,5 +8,6 @@ open! Core
 val submit_email_addr
   :  ?on_ok:(unit -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> string
   -> unit

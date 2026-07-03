@@ -5,16 +5,17 @@ open Js_of_ocaml
     ID token, then POSTs JSON to /api/<endpoint> with the X-Avalon-Auth header. *)
 
 let post
+  ~(auth : Firebase.Auth.t)
   ~(endpoint : string)
   ~(data : (string * Ffi.any) list)
   ~(on_ok : Ffi.any -> unit)
   ~(on_err : string -> unit)
   : unit
   =
-  match Firebase.current_user () with
+  match Firebase.Auth.current_user auth with
   | None -> on_err "Not signed in"
   | Some user ->
-    Firebase.get_id_token
+    Firebase.Auth.User.get_id_token
       user
       ~force_refresh:false
       ~on_err:(fun _ -> on_err "Could not get auth token")
@@ -59,41 +60,44 @@ let post
 let ignore_ok _ = ()
 let ignore_err _ = ()
 
-let login ?(on_ok = ignore_ok) ?(on_err = ignore_err) (email : string option) =
+let login ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~auth (email : string option) =
   let email_value =
     match email with
     | Some e -> Ffi.of_string e
     | None -> Ffi.null_value
   in
-  post ~endpoint:"login" ~data:[ "email", email_value ] ~on_ok ~on_err
+  post ~auth ~endpoint:"login" ~data:[ "email", email_value ] ~on_ok ~on_err
 ;;
 
-let join_lobby ~on_ok ~on_err ~name ~lobby =
+let join_lobby ~on_ok ~on_err ~auth ~name ~lobby =
   post
+    ~auth
     ~endpoint:"joinLobby"
     ~data:[ "name", Ffi.of_string name; "lobby", Ffi.of_string lobby ]
     ~on_ok
     ~on_err
 ;;
 
-let create_lobby ~on_ok ~on_err ~name =
-  post ~endpoint:"createLobby" ~data:[ "name", Ffi.of_string name ] ~on_ok ~on_err
+let create_lobby ~on_ok ~on_err ~auth ~name =
+  post ~auth ~endpoint:"createLobby" ~data:[ "name", Ffi.of_string name ] ~on_ok ~on_err
 ;;
 
-let leave_lobby ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~lobby () =
-  post ~endpoint:"leaveLobby" ~data:[ "lobby", Ffi.of_string lobby ] ~on_ok ~on_err
+let leave_lobby ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~auth ~lobby () =
+  post ~auth ~endpoint:"leaveLobby" ~data:[ "lobby", Ffi.of_string lobby ] ~on_ok ~on_err
 ;;
 
-let kick_player ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~lobby ~name () =
+let kick_player ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~auth ~lobby ~name () =
   post
+    ~auth
     ~endpoint:"kickPlayer"
     ~data:[ "lobby", Ffi.of_string lobby; "name", Ffi.of_string name ]
     ~on_ok
     ~on_err
 ;;
 
-let cancel_game ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~lobby ~name () =
+let cancel_game ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~auth ~lobby ~name () =
   post
+    ~auth
     ~endpoint:"cancelGame"
     ~data:[ "lobby", Ffi.of_string lobby; "name", Ffi.of_string name ]
     ~on_ok
@@ -103,6 +107,7 @@ let cancel_game ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~lobby ~name () =
 let vote_team
   ?(on_ok = ignore_ok)
   ?(on_err = ignore_err)
+  ~auth
   ~lobby
   ~name
   ~mission
@@ -111,6 +116,7 @@ let vote_team
   ()
   =
   post
+    ~auth
     ~endpoint:"voteTeam"
     ~data:
       [ "lobby", Ffi.of_string lobby
@@ -126,6 +132,7 @@ let vote_team
 let start_game
   ?(on_ok = ignore_ok)
   ?(on_err = ignore_err)
+  ~auth
   ~lobby
   ~player_list
   ~roles
@@ -133,6 +140,7 @@ let start_game
   ()
   =
   post
+    ~auth
     ~endpoint:"startGame"
     ~data:
       [ "lobby", Ffi.of_string lobby
@@ -147,6 +155,7 @@ let start_game
 let propose_team
   ?(on_ok = ignore_ok)
   ?(on_err = ignore_err)
+  ~auth
   ~lobby
   ~name
   ~mission
@@ -155,6 +164,7 @@ let propose_team
   ()
   =
   post
+    ~auth
     ~endpoint:"proposeTeam"
     ~data:
       [ "lobby", Ffi.of_string lobby
@@ -170,6 +180,7 @@ let propose_team
 let do_mission
   ?(on_ok = ignore_ok)
   ?(on_err = ignore_err)
+  ~auth
   ~lobby
   ~name
   ~mission
@@ -178,6 +189,7 @@ let do_mission
   ()
   =
   post
+    ~auth
     ~endpoint:"doMission"
     ~data:
       [ "lobby", Ffi.of_string lobby
@@ -190,8 +202,9 @@ let do_mission
     ~on_err
 ;;
 
-let assassinate ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~lobby ~name ~target () =
+let assassinate ?(on_ok = ignore_ok) ?(on_err = ignore_err) ~auth ~lobby ~name ~target () =
   post
+    ~auth
     ~endpoint:"assassinate"
     ~data:
       [ "lobby", Ffi.of_string lobby

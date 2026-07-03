@@ -1,14 +1,21 @@
 open! Core
 
-(** REST client (port of client/src/avalon-api-rest.ts). Each call POSTs JSON to
-    /api/<endpoint> with a fresh Firebase ID token. [on_ok] receives the parsed JSON
-    response; [on_err] receives an error message. *)
+(** REST client (port of client/src/avalon-api-rest.ts). Each call fetches a fresh
+    Firebase ID token from the given [auth] handle's current user, then POSTs JSON to
+    /api/<endpoint> with it. [on_ok] receives the parsed JSON response; [on_err] receives
+    an error message. *)
 
-val login : ?on_ok:(Ffi.any -> unit) -> ?on_err:(string -> unit) -> string option -> unit
+val login
+  :  ?on_ok:(Ffi.any -> unit)
+  -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
+  -> string option
+  -> unit
 
 val join_lobby
   :  on_ok:(Ffi.any -> unit)
   -> on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> name:string
   -> lobby:string
   -> unit
@@ -16,12 +23,14 @@ val join_lobby
 val create_lobby
   :  on_ok:(Ffi.any -> unit)
   -> on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> name:string
   -> unit
 
 val leave_lobby
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> unit
   -> unit
@@ -29,6 +38,7 @@ val leave_lobby
 val kick_player
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> unit
@@ -37,6 +47,7 @@ val kick_player
 val cancel_game
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> unit
@@ -45,6 +56,7 @@ val cancel_game
 val vote_team
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> mission:int
@@ -56,6 +68,7 @@ val vote_team
 val start_game
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> player_list:string list
   -> roles:string list
@@ -66,6 +79,7 @@ val start_game
 val propose_team
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> mission:int
@@ -77,6 +91,7 @@ val propose_team
 val do_mission
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> mission:int
@@ -88,6 +103,7 @@ val do_mission
 val assassinate
   :  ?on_ok:(Ffi.any -> unit)
   -> ?on_err:(string -> unit)
+  -> auth:Firebase.Auth.t
   -> lobby:string
   -> name:string
   -> target:string

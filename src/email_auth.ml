@@ -9,19 +9,19 @@ let email_regexp = Regexp.regexp "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
 let email_regex_ok email = Option.is_some (Regexp.string_match email_regexp email 0)
 let whitelist = [ "gmail.com"; "yahoo.com"; "outlook.com"; "hotmail.com"; "live.com" ]
 
-let send_sign_in_link ~email ~on_ok ~on_err =
+let send_sign_in_link ~auth ~email ~on_ok ~on_err =
   let hostname = Ffi.window_origin () ^ "/" in
   (* Percent-encode only the email value: [encodeURI] leaves [+] alone, and the URL param
      decoder on the return trip turns [+] into a space, breaking addresses like
      alice+x@gmail.com. *)
   let encoded_email = Js.to_string (Js.encodeURIComponent (Js.string email)) in
   let url = hostname ^ "?confirmEmail=" ^ encoded_email in
-  let settings = { Firebase.url; handle_code_in_app = true } in
-  Firebase.send_sign_in_link_to_email ~email ~settings ~on_ok ~on_err:(fun e ->
-    on_err (Firebase.error_message e))
+  let settings = { Firebase.Auth.url; handle_code_in_app = true } in
+  Firebase.Auth.send_sign_in_link_to_email auth ~email ~settings ~on_ok ~on_err:(fun e ->
+    on_err (Firebase.Error.message e))
 ;;
 
-let submit_email_addr ?(on_ok = noop_ok) ?(on_err = noop_err) email =
+let submit_email_addr ?(on_ok = noop_ok) ?(on_err = noop_err) ~auth email =
   if not (email_regex_ok email)
   then on_err "Not a valid email address"
   else (
@@ -30,7 +30,7 @@ let submit_email_addr ?(on_ok = noop_ok) ?(on_err = noop_err) email =
       | _ :: d :: _ -> d
       | _ -> ""
     in
-    let proceed () = send_sign_in_link ~email ~on_ok ~on_err in
+    let proceed () = send_sign_in_link ~auth ~email ~on_ok ~on_err in
     if List.mem whitelist domain ~equal:String.equal
     then proceed ()
     else
