@@ -2,7 +2,16 @@ open! Core
 open Js_of_ocaml
 
 (** REST client, port of client/src/avalon-api-rest.ts. Each call fetches a fresh Firebase
-    ID token, then POSTs JSON to /api/<endpoint> with the X-Avalon-Auth header. *)
+    ID token, then POSTs JSON to <api_base>/<endpoint> with the X-Avalon-Auth header. *)
+
+(* The requests go straight to the production REST server rather than a same-origin /api
+   path, so the client needs no reverse proxy in front of it and can be served from
+   anywhere as static files. CORS caveat: avalon.onl currently sends no
+   Access-Control-Allow-Origin headers, so browsers only allow these calls when the page
+   itself is served from avalon.onl (same-origin). From any other origin (e.g. local
+   dev/e2e) the backend must allow the origin — or the test browser must relax CORS, as
+   tests/e2e does. *)
+let api_base = "https://avalon.onl/api"
 
 let post
   ~(auth : Firebase.Auth.t)
@@ -20,7 +29,7 @@ let post
       ~force_refresh:false
       ~on_err:(fun _ -> on_err "Could not get auth token")
       ~on_ok:(fun id_token ->
-        let url = "/api/" ^ endpoint in
+        let url = api_base ^ "/" ^ endpoint in
         let headers =
           Ffi.obj
             [ "Content-Type", Ffi.of_string "application/json"

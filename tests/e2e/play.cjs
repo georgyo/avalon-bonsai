@@ -1,8 +1,9 @@
 // End-to-end multiplayer driver for the Avalon Bonsai client.
 //
 // Spawns 5 headless browser contexts, logs each in anonymously, creates/joins a lobby on
-// the live backend (via serve.cjs which proxies /api -> avalon.onl), starts a game, and
-// plays it to completion. It reads each player's secret role from the role sheet and:
+// the live backend (the client POSTs straight to https://avalon.onl/api; serve.cjs only
+// serves the static bundle), starts a game, and plays it to completion. It reads each
+// player's secret role from the role sheet and:
 //   MODE=good (default) -> everyone succeeds missions  -> Good wins
 //   MODE=evil           -> evil players sabotage       -> typically Evil wins
 //
@@ -91,7 +92,14 @@ async function act(page, i) {
 
 (async () => {
   const fs = require('fs'); fs.mkdirSync(SHOTS, { recursive: true });
-  const browser = await chromium.launch({ headless: true, executablePath: CHROME });
+  // --disable-web-security: the client POSTs straight to https://avalon.onl/api, which is
+  // cross-origin from localhost:8123 and the backend sends no CORS headers. Fine for a
+  // throwaway test browser; production serves the client from avalon.onl (same-origin).
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: CHROME,
+    args: ['--disable-web-security'],
+  });
   const pages = []; const errs = [];
   for (let i = 0; i < 5; i++) { const ctx = await browser.newContext(); const p = await ctx.newPage(); p.on('pageerror', e => errs.push(`[${NAMES[i]}] ${e.message}`)); pages.push(p); }
   for (let i = 0; i < 5; i++) { await loginAnon(pages[i]); log(`${NAMES[i]} logged in`); }

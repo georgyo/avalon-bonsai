@@ -89,17 +89,21 @@ dune runtest test     # or `dune runtest` for everything
 
 ## Run
 
-Serve the build directory behind a proxy that forwards `/api` to the Avalon REST server
-(as the original Vite dev server does, proxying to `https://avalon.onl/api`). The repo
-ships a tiny static-server-plus-proxy for exactly this:
+The client is fully static and calls the Avalon REST server directly at
+`https://avalon.onl/api` (no same-origin `/api` proxy needed), so any static file server
+works:
 
 ```
-node tests/e2e/serve.cjs   # serves _build/default/bin on :8123, proxies /api -> avalon.onl
+node tests/e2e/serve.cjs   # serves _build/default/bin on :8123
 ```
 
 Then open `http://localhost:8123/`. Anonymous login, the lobby list, and live stats work
-directly against the production Firebase project; lobby/game actions go through the `/api`
-proxy. (`python3 -m http.server` will serve the static files but cannot proxy `/api`.)
+directly against the production Firebase project. **CORS caveat for lobby/game actions:**
+the REST server currently sends no `Access-Control-Allow-Origin` headers, so browsers
+only allow the API calls when the page is served from `avalon.onl` itself (same-origin).
+From localhost, either have the backend allow the origin (it must also allow the
+`Content-Type` and `X-Avalon-Auth` request headers in the preflight) or use a
+CORS-relaxed test browser, as `tests/e2e/play.cjs` does (`--disable-web-security`).
 
 ## Notes
 

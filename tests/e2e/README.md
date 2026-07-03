@@ -11,8 +11,10 @@ backend (Firebase + the `https://avalon.onl/api` REST server).
 
 ## Files
 
-- `serve.cjs` — serves `_build/default/bin` and reverse-proxies `/api` → `https://avalon.onl/api`
-  (so the client talks to the real server same-origin, avoiding CORS).
+- `serve.cjs` — serves `_build/default/bin`. The client POSTs straight to
+  `https://avalon.onl/api` (no proxy); since that's cross-origin from localhost and the
+  backend sends no CORS headers, `play.cjs` launches its browser with
+  `--disable-web-security`.
 - `play.cjs` — spawns 5 anonymous players, creates/joins a lobby, starts a game, and plays
   it to completion. Reads each player's secret role and either succeeds every mission
   (`MODE=good`) or has evil players sabotage (`MODE=evil`).
@@ -24,7 +26,7 @@ backend (Firebase + the `https://avalon.onl/api` REST server).
 eval $(opam env --switch=5.2.0+ox)
 dune build --profile release bin/main.bc.js
 
-# 1. start the proxy/static server
+# 1. start the static server
 node tests/e2e/serve.cjs        # listens on :8123
 
 # 2. drive a game (uses Playwright's bundled Chromium; or set CHROME=/path/to/chrome)
