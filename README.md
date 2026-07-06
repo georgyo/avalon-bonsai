@@ -59,12 +59,11 @@ nix develop           # dev shell with the toolchain
 ```
 
 The opam solver's resolution is materialized into the committed `package-defs.json`. After
-bumping flake inputs, regenerate it, and also refresh `package-defs.lock` (the marker CI
+bumping flake inputs, regenerate it (this also refreshes `package-defs.lock`, the marker CI
 uses to detect a flake update without a re-materialization):
 
 ```
-nix build .#materialize && cp -L result package-defs.json
-./scripts/update-package-defs-lock.sh
+./scripts/update-package-defs.sh
 ```
 
 CI (`.github/workflows/nix.yml`) builds the flake, after fast drift checks (vendored

@@ -83,7 +83,7 @@
         # gives no way to raise that timeout, so instead we MATERIALIZE the resolution: run the
         # solver once locally and commit its output (package-defs.json). CI then reads that file
         # via materializedDefsToScope and never runs the solver at all. Regenerate with:
-        #   nix build .#materialize && cp -L result package-defs.json   (add --impure if needed)
+        #   ./scripts/update-package-defs.sh
         #
         # Only defined on x86_64-linux: evaluating it runs the opam solver via
         # import-from-derivation (exactly what materialization exists to avoid), and the
@@ -92,11 +92,7 @@
           if system == "x86_64-linux" then
             on.materialize {
               inherit repos;
-              regenCommand = [
-                "nix"
-                "build"
-                ".#materialize"
-              ];
+              regenCommand = [ "./scripts/update-package-defs.sh" ];
             } query
           else
             null;
@@ -186,11 +182,11 @@
           default = avalon-bonsai;
           avalon-bonsai = avalon-bonsai;
         }
-        # `nix build .#materialize && cp -L result package-defs.json` regenerates the
-        # committed resolution (e.g. after bumping the opam repo inputs). This is the only
-        # step that runs opam's solver; the normal build never does. x86_64-linux only —
-        # see the `materialize` binding above. After regenerating, also run
-        # scripts/update-package-defs-lock.sh so CI's staleness check passes.
+        # `./scripts/update-package-defs.sh` regenerates the committed resolution (e.g.
+        # after bumping the opam repo inputs) by building this package and copying it to
+        # package-defs.json (plus refreshing package-defs.lock). This is the only step
+        # that runs opam's solver; the normal build never does. x86_64-linux only — see
+        # the `materialize` binding above.
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           materialize = pkgs.runCommand "package-defs.json" { } "cp ${materialize} $out";
         };

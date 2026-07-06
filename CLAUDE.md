@@ -27,8 +27,8 @@ static; serve that directory with anything (`node tests/e2e/serve.cjs` serves it
 
 Hermetic Nix build: `nix build .#default`; dev shell: `nix develop` (intentionally has no
 ocamlformat/ocaml-lsp — use the opam switch for those). After bumping flake inputs,
-re-materialize the opam resolution: `nix build .#materialize && cp -L result
-package-defs.json && ./scripts/update-package-defs-lock.sh` (CI fails on drift otherwise).
+re-materialize the opam resolution with `./scripts/update-package-defs.sh` (CI fails on
+drift otherwise).
 
 E2E tests (Playwright, hit the live production backend — they create real
 lobbies/games): see `tests/e2e/README.md`. They need the release bundle and launch

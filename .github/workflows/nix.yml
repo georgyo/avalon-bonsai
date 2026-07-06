@@ -50,7 +50,7 @@ jobs:
       - name: Verify package-defs.lock matches flake.lock (materialized resolution not stale)
         # package-defs.json is the materialized opam resolution; package-defs.lock records
         # the opam repo input revs it was generated against. If flake.lock moved those revs
-        # without a re-materialization (nix build .#materialize + cp + this script), fail.
+        # without a re-materialization (scripts/update-package-defs.sh), fail.
         run: |
           ./scripts/update-package-defs-lock.sh
           git diff --exit-code package-defs.lock
