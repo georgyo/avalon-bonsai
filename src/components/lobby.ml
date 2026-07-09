@@ -17,10 +17,16 @@ module Style =
   stylesheet
     {|
   .lobby_select { display: flex; justify-content: center; padding: 16px; }
-  .lobby_inner { width: 100%; max-width: 440px; }
+  /* a light card surface: the shared filled text-field/stats styling assumes a light
+     background and is unreadable directly on the indigo page */
+  .lobby_inner { width: 100%; max-width: 440px; background: #e0f7fa; border-radius: 8px; padding: 24px 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
   .lobby_buttons { width: 100%; }
   .lobby_buttons .btn { width: 100%; }
-  .checkbox_row { display: flex; align-items: center; gap: 6px; color: #e0f7fa; padding-top: 16px; }
+  .checkbox_row { display: flex; align-items: center; justify-content: center; gap: 6px; color: #e0f7fa; padding-top: 16px; }
+  .hint_on_dark { color: rgba(255,255,255,0.65); }
+  .on_dark { color: #e0f7fa; }
+  /* the shareable lobby code: the one thing the host needs to read out / long-press */
+  .lobby_code { font-size: 2rem; font-weight: 700; letter-spacing: 0.35em; text-align: center; background: #fff; border-radius: 8px; padding: 8px 8px 8px 16px; margin-top: 8px; user-select: all; }
   /* drag-to-reorder (toplayer/drag_and_drop) affordances */
   .drag_handle { cursor: grab; color: rgba(0,0,0,0.4); display: flex; align-items: center; }
   .drag_handle:active { cursor: grabbing; }
@@ -118,6 +124,7 @@ let lobby_select (local_ graph) =
       ; div
           ~attrs:[ Ui.col; Ui.ga_2; Style.lobby_buttons ]
           [ btn
+              ~attrs:[ Ui.primary ]
               ~disabled:(String.is_empty name)
               ~loading:creating
               ~on_click:do_create
@@ -140,6 +147,7 @@ let lobby_select (local_ graph) =
       ; div
           ~attrs:[ Ui.col; Ui.ga_2; Style.lobby_buttons ]
           [ btn
+              ~attrs:[ Ui.primary ]
               ~disabled:(String.is_empty lobby)
               ~loading:joining
               ~on_click:do_join
@@ -299,13 +307,19 @@ let game_lobby (local_ graph) =
   let reason_not_start =
     if num_players < 5
     then
-      Some (sprintf "Need at least 5 players! Invite your friends to lobby %s" lobby_name)
+      (* surface the lobby code as a big selectable block: it is the one thing the host
+         has to share to fill the lobby *)
+      Some
+        (N.div
+           [ N.text "Need at least 5 players! Invite your friends with the lobby code:"
+           ; {%html.jsx|<div *{[ Style.lobby_code ]}>#{lobby_name}</div>|}
+           ])
     else if num_players > 10
-    then Some "Cannot start game with more than 10 players"
+    then Some (N.text "Cannot start game with more than 10 players")
     else if not (D.is_admin m)
     then
       Some
-        (sprintf
+        (textf
            "Waiting for %s to start game..."
            (Option.value_map (D.admin m) ~default:"" ~f:(fun a -> a.name)))
     else None
@@ -323,7 +337,8 @@ let game_lobby (local_ graph) =
   in
   let seating_hint =
     if D.is_admin m && num_players > 2
-    then {%html.jsx|<p *{[ Ui.caption ]}>Use the arrows to set seating order</p>|}
+    then
+      {%html.jsx|<p *{[ Ui.caption; Style.hint_on_dark ]}>Use the arrows to set seating order</p>|}
     else N.none
   in
   let roles_col =
@@ -335,14 +350,19 @@ let game_lobby (local_ graph) =
   let counts =
     if valid_team_size
     then
-      {%html.jsx|<div *{[ Ui.row; Ui.center ]}><p *{[ Ui.text_h6; Ui.label ]}>%{textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil}</p></div>|}
+      {%html.jsx|<div *{[ Ui.row; Ui.center ]}><p *{[ Ui.text_h6; Style.on_dark ]}>%{textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil}</p></div>|}
     else N.none
   in
   let start_area =
     match reason_not_start with
-    | None -> btn ~loading:starting ~on_click:start [ mdi "play"; N.text "Start Game" ]
+    | None ->
+      btn
+        ~attrs:[ Ui.cta_on_dark ]
+        ~loading:starting
+        ~on_click:start
+        [ mdi "play"; N.text "Start Game" ]
     | Some reason ->
-      card ~attrs:[ Ui.info_card ] [ card_text ~attrs:[ Ui.center ] [ N.text reason ] ]
+      card ~attrs:[ Ui.info_card ] [ card_text ~attrs:[ Ui.center ] [ reason ] ]
   in
   let log_attrs =
     [ A.type_ "checkbox"
@@ -363,7 +383,7 @@ let game_lobby (local_ graph) =
       %{counts}
       <div *{[ Ui.row; Ui.center; Ui.pt_2 ]}>%{start_area}</div>
       <label *{[ Style.checkbox_row ]}><input *{log_attrs} />#{" In-game log"}</label>
-      <div *{[ Ui.col; Ui.pt_6 ]}>%{feedback_link "Send feedback"}</div>
+      <div *{[ Ui.col; Ui.center; Ui.pt_6 ]}>%{feedback_link "Send feedback"}</div>
     </div>
   |}
 ;;

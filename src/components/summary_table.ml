@@ -12,14 +12,17 @@ module Style =
   [%css
   stylesheet
     {|
-  .summary_table { border-collapse: collapse; }
+  .summary_table { border-collapse: collapse; font-size: 0.875rem; }
   .summary_table tr { height: 2.2em; }
   .summary_table td { width: 1.7em; padding: 0 4px; text-align: center; }
-  .summary_table tr:nth-child(even) { background: gainsboro; }
-  .summary_table tr:nth-child(odd) { background: bisque; }
-  .player_name { border-left: 2px solid; white-space: nowrap; text-align: left; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-  .role_cell { border-right: 2px solid; white-space: nowrap; }
-  .mission_result { border-right: 2px solid; }
+  .summary_table tr:nth-child(even) { background: #ffffff; }
+  .summary_table tr:nth-child(odd) { background: #eceff1; }
+  .player_name { border-left: 1px solid rgba(0,0,0,0.25); white-space: nowrap; text-align: left; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .role_cell { border-right: 1px solid rgba(0,0,0,0.25); white-space: nowrap; }
+  .mission_result { border-right: 1px solid rgba(0,0,0,0.25); }
+  /* allegiance tint on the reveal columns: the table communicates teams at a glance */
+  .team_good { background: rgba(21,101,192,0.10); }
+  .team_evil { background: rgba(198,40,40,0.12); }
 |}]
 
 let mission_summary_table
@@ -35,7 +38,7 @@ let mission_summary_table
     fa_layers
       (List.filter_opt
          [ (if String.equal proposal.proposer player
-            then Some (fa ~color:"gold" "fas" "fa-circle")
+            then Some (fa ~color:"#f9a825" "fas" "fa-circle")
             else None)
          ; (if List.mem proposal.team player ~equal:String.equal
             then Some (fa ~color:"#629ec1" "far" "fa-circle")
@@ -45,17 +48,29 @@ let mission_summary_table
             | _ ->
               Some
                 (if List.mem proposal.votes player ~equal:String.equal
-                 then fa ~color:"green" "far" "fa-thumbs-up"
-                 else fa ~color:"#ed1515" "far" "fa-thumbs-down"))
+                 then fa ~color:"#2e7d32" "far" "fa-thumbs-up"
+                 else fa ~color:"#c62828" "far" "fa-thumbs-down"))
          ])
   in
   let row player =
+    let team_tint =
+      match roles with
+      | None -> []
+      | Some rs ->
+        (match
+           List.find rs ~f:(fun r -> String.equal r.name player)
+           |> Option.bind ~f:(fun r -> Map.find Avalonlib.role_map r.role)
+         with
+         | Some { team = Good; _ } -> [ Style.team_good ]
+         | Some { team = Evil; _ } -> [ Style.team_evil ]
+         | None -> [])
+    in
     let role_cell =
       match roles with
       | Some rs ->
         let r = List.find rs ~f:(fun r -> String.equal r.name player) in
         [ N.td
-            ~attrs:[ Style.role_cell ]
+            ~attrs:(Style.role_cell :: team_tint)
             [ N.text (Option.value_map r ~default:"" ~f:(fun r -> r.role)) ]
         ]
       | None -> []
@@ -86,7 +101,10 @@ let mission_summary_table
         prop_cells @ result_cell)
     in
     N.tr
-      ([ N.td ~attrs:[ Style.player_name ] [ spanc ~attrs:[ Ui.fw ] [ N.text player ] ] ]
+      ([ N.td
+           ~attrs:(Style.player_name :: team_tint)
+           [ spanc ~attrs:[ Ui.fw ] [ N.text player ] ]
+       ]
        @ role_cell
        @ mission_cells)
   in

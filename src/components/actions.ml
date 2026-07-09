@@ -13,10 +13,19 @@ module N = Vdom.Node
 
 module Style =
   [%css
-  stylesheet {|
+  stylesheet
+    {|
   .action { width: 100%; }
   .action_title { background: #b3e5fc; }
+  /* paired decision buttons read as one choice, not two controls at opposite edges */
+  .action_buttons { display: flex; justify-content: center; gap: 24px; padding-top: 8px; }
+  .waiting { display: flex; align-items: center; justify-content: center; gap: 10px; color: rgba(0,0,0,0.6); }
 |}]
+
+(* a small "someone else is acting" indicator shared by the four waiting branches *)
+let waiting_row text =
+  {%html.jsx|<div *{[ Style.waiting ]}><span *{[ Ui.spinner ]}></span>#{text}</div>|}
+;;
 
 (* Fire [reset] whenever the active (mission, proposal) changes, to clear optimistic
    per-proposal local state. match%sub does not reset inactive-branch state in this Bonsai
@@ -72,13 +81,18 @@ let team_proposal_action ~selected (local_ graph) =
           ~attrs:[ Ui.col; Ui.center ]
           [ {%html.jsx|<div *{[ Ui.center ]}>%{textf "Propose a team of %d" team_size}</div>|}
           ; btn
+              ~attrs:[ Ui.primary ]
               ~disabled:(not valid)
               ~loading:proposing
               ~on_click:propose
               [ N.text "Propose Team" ]
           ]
       else
-        {%html.jsx|<div *{[ Ui.center ]}>%{textf "Waiting for %s to propose a team of %d" (Option.value g.current_proposer ~default:"") team_size}</div>|}
+        waiting_row
+          (sprintf
+             "Waiting for %s to propose a team of %d"
+             (Option.value g.current_proposer ~default:"")
+             team_size)
     in
     card
       ~attrs:[ Style.action ]
@@ -134,21 +148,19 @@ let team_vote_action (local_ graph) =
     let voted_no = Option.value_map voted ~default:false ~f:not in
     let buttons =
       div
-        ~attrs:[ Ui.row; Ui.between ]
+        ~attrs:[ Style.action_buttons ]
         [ btn
+            ~attrs:[ Ui.success ]
             ~disabled
             ~on_click:(vote true)
-            [ (if voted_yes
-               then fa ~color:"green" "fas" "fa-vote-yea"
-               else fa ~color:"green" "far" "fa-thumbs-up")
+            [ (if voted_yes then fa "fas" "fa-vote-yea" else fa "far" "fa-thumbs-up")
             ; N.text " Approve"
             ]
         ; btn
+            ~attrs:[ Ui.danger ]
             ~disabled
             ~on_click:(vote false)
-            [ (if voted_no
-               then fa ~color:"red" "fas" "fa-vote-yea"
-               else fa ~color:"red" "far" "fa-thumbs-down")
+            [ (if voted_no then fa "fas" "fa-vote-yea" else fa "far" "fa-thumbs-down")
             ; N.text " Reject"
             ]
         ]
@@ -223,22 +235,25 @@ let mission_action (local_ graph) =
              then N.none
              else {%html.jsx|<div *{[ Ui.field_error; Ui.center ]}>#{error}</div>|})
           ; div
-              ~attrs:[ Ui.row; Ui.between ]
+              ~attrs:[ Style.action_buttons ]
               [ btn
+                  ~attrs:[ Ui.success ]
                   ~on_click:(vote true)
-                  [ fa ~color:"green" "fas" "fa-check-circle"; N.text " SUCCESS" ]
+                  [ fa "fas" "fa-check-circle"; N.text " SUCCESS" ]
               ; btn
+                  ~attrs:[ Ui.danger ]
                   ~on_click:(vote false)
-                  [ fa ~color:"red" "fas" "fa-times-circle"; N.text " FAIL" ]
+                  [ fa "fas" "fa-times-circle"; N.text " FAIL" ]
               ]
           ]
       else
-        N.div
-          [ N.text
-              (if List.length still_waiting > 0
-               then "Waiting for " ^ Util.join_with_and still_waiting
-               else "Waiting for results...")
-          ]
+        waiting_row
+          (if List.length still_waiting > 0
+           then
+             "Waiting for "
+             ^ Util.join_with_and still_waiting
+             ^ " to play their mission card"
+           else "Waiting for results...")
     in
     card
       ~attrs:[ Style.action ]
@@ -285,10 +300,16 @@ let assassination_action ~selected (local_ graph) =
     let body =
       if assassin
       then
-        N.div
-          [ btn ~disabled:(not valid) ~loading:assassinating ~on_click:go [ N.text label ]
+        div
+          ~attrs:[ Style.action_buttons ]
+          [ btn
+              ~attrs:[ Ui.danger ]
+              ~disabled:(not valid)
+              ~loading:assassinating
+              ~on_click:go
+              [ N.text label ]
           ]
-      else N.div [ N.text "Waiting for target selection" ]
+      else waiting_row "Waiting for the assassin to pick a target"
     in
     card
       ~attrs:[ Style.action ]

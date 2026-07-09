@@ -13,11 +13,15 @@ module Style =
   stylesheet
     {|
   .welcome_heading { font-size: 1.75rem; font-weight: 400; line-height: 1.3; }
+  /* the "Online" suffix: thin + muted, matching the original's one-line lockup */
+  .online { font-weight: 200; color: rgba(0,0,0,0.45); }
   .alert_error { background: #ffcdd2; color: #b71c1c; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
-  .login_form { width: 100%; max-width: 420px; margin: 0 auto; }
+  .login_form { width: 100%; max-width: 420px; margin: 32px auto 0; }
+  .tabs_gap { margin-top: 32px; width: 100%; }
+  .feedback_row { align-self: flex-end; margin-top: 24px; }
 
   @media (min-width: 600px) {
-    .welcome_heading { font-size: 3rem; }
+    .welcome_heading { font-size: 2.6rem; }
   }
 |}]
 
@@ -83,7 +87,11 @@ let user_login (local_ graph) =
             ~extra:[ on_enter submit_email ]
             ()
         ; field_err
-        ; btn ~loading:submitting ~on_click:submit_email [ N.text "Login" ]
+        ; btn
+            ~attrs:[ Ui.primary ]
+            ~loading:submitting
+            ~on_click:submit_email
+            [ N.text "Login" ]
         ]
     else
       div
@@ -98,10 +106,12 @@ let user_login (local_ graph) =
         ]
   in
   let anon_pane =
-    div ~attrs:[ Ui.pa_4 ] [ btn ~on_click:anon [ N.text "Login" ]; field_err ]
+    div
+      ~attrs:[ Ui.pa_4; Style.login_form ]
+      [ btn ~attrs:[ Ui.primary ] ~on_click:anon [ N.text "Login" ]; field_err ]
   in
   let heading =
-    {%html.jsx|<span *{[ Style.welcome_heading ]}>Avalon: The Resistance <span *{[ Ui.thin ]}>Online</span></span>|}
+    {%html.jsx|<span *{[ Style.welcome_heading ]}>Avalon: The Resistance <span *{[ Style.online ]}>Online</span></span>|}
   in
   let subtitle =
     {%html.jsx|<p *{[ Ui.mt_4 ]}><span *{[ Ui.subtitle ]}>A game of social deduction for 5 to 10 people, now on desktop and mobile.</span></p>|}
@@ -112,9 +122,9 @@ let user_login (local_ graph) =
         <div *{[ Ui.col; Ui.center ]}>
           %{alert}
           %{card_title [ heading; subtitle ]}
-          %{strip}
+          <div *{[ Style.tabs_gap ]}>%{strip}</div>
           %{if String.equal tab "email" then email_pane else anon_pane}
-          %{feedback_link "Email"}
+          <div *{[ Style.feedback_row ]}>%{feedback_link "Send feedback"}</div>
         </div>
       |}
     ]

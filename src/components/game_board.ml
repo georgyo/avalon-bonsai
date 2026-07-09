@@ -10,9 +10,11 @@ module N = Vdom.Node
 
 module Style =
   [%css
-  stylesheet {|
-  .game_board { width: 100%; }
-  .game_section { padding: 8px 0; }
+  stylesheet
+    {|
+  /* one owned 16px rhythm between sections, and a readable line length on wide screens */
+  .game_board { width: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .game_section { padding: 0; }
 |}]
 
 let game_board (local_ graph) =

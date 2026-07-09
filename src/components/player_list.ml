@@ -98,7 +98,8 @@ let game_player_list ~selected ~set_selected (local_ graph) =
           not (List.mem p.votes name ~equal:String.equal))
       | _ -> false
     in
-    let crown_color = if g.current_proposal_idx < 4 then "#fcfc00" else "#cc0808" in
+    (* amber-gold reads on the light list where pure yellow #fcfc00 vanished *)
+    let crown_color = if g.current_proposal_idx < 4 then "#f9a825" else "#cc0808" in
     let status_icons name =
       let icons =
         List.filter_opt
@@ -110,9 +111,9 @@ let game_player_list ~selected ~set_selected (local_ graph) =
              else if has_voted name
              then Some (fa ~color:"#4c4c4c" "fas" "fa-vote-yea")
              else if approved name
-             then Some (fa ~color:"green" "far" "fa-thumbs-up")
+             then Some (fa ~color:"#2e7d32" "far" "fa-thumbs-up")
              else if rejected name
-             then Some (fa ~color:"#ed1515" "far" "fa-thumbs-down")
+             then Some (fa ~color:"#c62828" "far" "fa-thumbs-down")
              else None)
           ]
       in
@@ -206,7 +207,9 @@ let game_participants ~selected ~set_selected (local_ graph) =
       if String.equal tab "players" then players else Role_list.role_list_view role_objs
     in
     let strip =
+      (* this strip sits directly on the indigo page, not on a light card *)
       tab_strip
+        ~tab_attrs:[ Ui.tab_dark ]
         ~active:(if String.equal tab "players" then 0 else 1)
         ~on_select:(fun i -> set_tab (if i = 0 then "players" else "roles"))
         [ [ N.text "Players" ]; [ N.text "Roles" ] ]

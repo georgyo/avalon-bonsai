@@ -14,6 +14,7 @@ module Style =
   .stats_wrap table { border-collapse: collapse; }
   .stats_wrap td { text-align: right; padding: 2px 12px; }
   .stats_header { border-bottom: 2px solid; }
+  .stats_header td { font-weight: 500; color: rgba(0,0,0,0.6); }
 |}]
 
 let stats_display (stats : stats option) (global : stats option) =
@@ -27,7 +28,7 @@ let stats_display (stats : stats option) (global : stats option) =
   let pct n d =
     if d > 0
     then sprintf "%d%%" (Float.to_int (100. *. Float.of_int n /. Float.of_int d))
-    else "N/A"
+    else "\u{2014}"
   in
   let row label a b c =
     N.tr
@@ -44,7 +45,7 @@ let stats_display (stats : stats option) (global : stats option) =
     then sprintf "%.1f hours" hours
     else if secs > 60
     then sprintf "%d minutes" (secs / 60)
-    else "Not enough"
+    else "Less than a minute"
   in
   let global_rows =
     match global with

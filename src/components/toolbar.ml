@@ -15,7 +15,7 @@ module Style =
   [%css
   stylesheet
     {|
-  .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e88e5; color: #e0f7fa; }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #3949ab; color: #e0f7fa; box-shadow: 0 2px 4px rgba(0,0,0,0.25); }
   .toolbar_email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
   .quit_text { display: inline; }
 
@@ -148,6 +148,7 @@ let quit_button (local_ graph) =
   let%arr open_ = controls.open_ in
   let activator =
     btn
+      ~attrs:[ Ui.outlined ]
       ~on_click:open_
       [ mdi "exit-to-app"; spanc ~attrs:[ Style.quit_text ] [ N.text "Quit" ] ]
   in
@@ -180,7 +181,10 @@ let game_toolbar (local_ graph) =
   else (
     let email = Option.value (Option.bind m.user ~f:(fun u -> u.email)) ~default:"" in
     let logout =
-      btn ~on_click:(eff State.logout) [ mdi "exit-to-app"; N.text "Logout" ]
+      btn
+        ~attrs:[ Ui.outlined ]
+        ~on_click:(eff State.logout)
+        [ mdi "exit-to-app"; N.text "Logout" ]
     in
     {%html.jsx|
       <div *{[ Style.toolbar ]}>

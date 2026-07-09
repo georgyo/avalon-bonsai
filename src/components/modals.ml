@@ -15,11 +15,16 @@ module Style =
   [%css
   stylesheet
     {|
-  .endgame_title { background: #80deea; text-align: center; justify-content: center; }
+  .endgame_title { background: #b3e5fc; text-align: center; justify-content: center; }
   .endgame_message { font-size: 1.25rem; text-align: center; }
   .endgame_table_wrap { overflow-x: auto; width: 100%; }
-  /* the end-game modal is much wider than the small confirmation dialogs */
-  .endgame_card { background: #e0f7fa; border-radius: 8px; max-width: 900px; width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; }
+  .endgame_table_wrap table { margin: 0 auto; }
+  /* the end-game modal is much wider than the small confirmation dialogs
+     (dvh, not vh: iOS Safari's vh ignores the collapsing URL bar) */
+  .endgame_card { background: #e0f7fa; border-radius: 8px; max-width: 900px; width: calc(100vw - 32px); max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow: auto; padding-bottom: 8px; }
+  /* outcome-tinted dialog title bars (defined after endgame_title so they win the cascade) */
+  .title_success { display: flex; align-items: center; gap: 8px; background: #c8e6c9; color: #1b5e20; }
+  .title_fail { display: flex; align-items: center; gap: 8px; background: #ffcdd2; color: #b71c1c; }
 |}]
 
 let start_node ~close:_ =
@@ -39,6 +44,7 @@ let start_node ~close:_ =
     ; div
         ~attrs:[ Ui.row; Ui.actions ]
         [ btn
+            ~attrs:[ Ui.primary ]
             ~on_click:
               (eff (fun () ->
                  State.set_modal No_modal;
@@ -55,7 +61,9 @@ let fallback_node ~title ~message ~close =
     ~attrs:[ Ui.overlay_card ]
     [ card_title ~attrs:[ Ui.title_bar ] [ N.h3 [ N.text title ] ]
     ; card_text [ N.p [ N.text message ] ]
-    ; div ~attrs:[ Ui.row; Ui.actions ] [ btn ~on_click:close [ N.text "Close" ] ]
+    ; div
+        ~attrs:[ Ui.row; Ui.actions ]
+        [ btn ~attrs:[ Ui.primary ] ~on_click:close [ N.text "Close" ] ]
     ]
 ;;
 
@@ -72,15 +80,19 @@ let mission_node (g : Game.t) ~close =
       ~message:"No mission result is available yet."
       ~close
   | Some mission ->
-    let title =
+    let title, title_tint =
       match mission.state with
       | Success ->
-        N.div [ fa ~color:"green" "fas" "fa-check-circle"; N.text " Mission Succeeded!" ]
-      | _ -> N.div [ fa ~color:"red" "fas" "fa-times-circle"; N.text " Mission Failed!" ]
+        ( N.div
+            [ fa ~color:"#2e7d32" "fas" "fa-check-circle"; N.text " Mission Succeeded!" ]
+        , Style.title_success )
+      | _ ->
+        ( N.div [ fa ~color:"#c62828" "fas" "fa-times-circle"; N.text " Mission Failed!" ]
+        , Style.title_fail )
     in
     div
       ~attrs:[ Ui.overlay_card ]
-      [ card_title ~attrs:[ Ui.title_bar ] [ title ]
+      [ card_title ~attrs:[ title_tint ] [ title ]
       ; card_text
           [ textf
               "%s had %s failure %s"
@@ -88,7 +100,9 @@ let mission_node (g : Game.t) ~close =
               (if mission.num_fails > 0 then Int.to_string mission.num_fails else "no")
               (if mission.num_fails = 1 then "vote." else "votes.")
           ]
-      ; div ~attrs:[ Ui.row; Ui.actions ] [ btn ~on_click:close [ N.text "Close" ] ]
+      ; div
+          ~attrs:[ Ui.row; Ui.actions ]
+          [ btn ~attrs:[ Ui.primary ] ~on_click:close [ N.text "Close" ] ]
       ]
 ;;
 
@@ -96,11 +110,11 @@ let end_node (g : Game.t) ~close =
   match Game.outcome g with
   | None -> N.none
   | Some o ->
-    let title =
+    let title, title_tint =
       match o.state with
-      | Good_win -> "Good wins!"
-      | Evil_win -> "Evil wins!"
-      | Canceled -> "Game Canceled"
+      | Good_win -> "Good wins!", [ Style.title_success ]
+      | Evil_win -> "Evil wins!", [ Style.title_fail ]
+      | Canceled -> "Game Canceled", []
     in
     let role_assignments =
       List.sort o.roles ~compare:(fun a b ->
@@ -144,7 +158,7 @@ let end_node (g : Game.t) ~close =
     div
       ~attrs:[ Style.endgame_card ]
       [ card_title
-          ~attrs:[ Style.endgame_title ]
+          ~attrs:(Style.endgame_title :: title_tint)
           [ spanc ~attrs:[ Ui.text_h4; Ui.fw ] [ N.text title ] ]
       ; card_text [ body ]
       ]

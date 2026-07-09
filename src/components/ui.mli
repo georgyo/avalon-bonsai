@@ -107,12 +107,16 @@ val upper : Vdom.Attr.t
 val title_bar : Vdom.Attr.t
 val info_card : Vdom.Attr.t
 val primary : Vdom.Attr.t
+val success : Vdom.Attr.t
+val danger : Vdom.Attr.t
+val cta_on_dark : Vdom.Attr.t
 val icon_btn : Vdom.Attr.t
 val outlined : Vdom.Attr.t
 val actions : Vdom.Attr.t
 val tabs : Vdom.Attr.t
 val tab : Vdom.Attr.t
 val tab_active : Vdom.Attr.t
+val tab_dark : Vdom.Attr.t
 val li_prepend : Vdom.Attr.t
 val li_mid : Vdom.Attr.t
 val li_title : Vdom.Attr.t
@@ -123,4 +127,5 @@ val welcome : Vdom.Attr.t
 val overlay_card : Vdom.Attr.t
 val modal_box : Vdom.Attr.t
 val layers_text : Vdom.Attr.t
+val spinner : Vdom.Attr.t
 val spinner_lg : Vdom.Attr.t
