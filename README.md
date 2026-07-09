@@ -3,7 +3,8 @@
 A port of the [avalon](../avalon) Vue 3 + Vuetify + Firebase **client** into an
 [OxCaml](https://oxcaml.org) [Bonsai](https://github.com/janestreet/bonsai) web app
 (client side only). It talks to the same real backend: Firebase Auth (anonymous +
-email-link), Firestore real-time listeners, and the `/api` REST server.
+email-link), Firestore real-time listeners, and the REST server at
+`https://api.avalon.onl/api`.
 
 ## Layout
 
@@ -89,20 +90,27 @@ dune runtest test     # or `dune runtest` for everything
 ## Run
 
 The client is fully static and calls the Avalon REST server directly at
-`https://avalon.onl/api` (no same-origin `/api` proxy needed), so any static file server
-works:
+`https://api.avalon.onl/api` (no same-origin `/api` proxy needed), so any static file
+server works:
 
 ```
 node tests/e2e/serve.cjs   # serves _build/default/bin on :8123
 ```
 
 Then open `http://localhost:8123/`. Anonymous login, the lobby list, and live stats work
-directly against the production Firebase project. **CORS caveat for lobby/game actions:**
-the REST server currently sends no `Access-Control-Allow-Origin` headers, so browsers
-only allow the API calls when the page is served from `avalon.onl` itself (same-origin).
-From localhost, either have the backend allow the origin (it must also allow the
-`Content-Type` and `X-Avalon-Auth` request headers in the preflight) or use a
-CORS-relaxed test browser, as `tests/e2e/play.cjs` does (`--disable-web-security`).
+directly against the production Firebase project, and `api.avalon.onl` serves CORS
+headers for allowed origins (`ocaml.avalon.onl`, `avalon.onl`, `localhost`,
+`127.0.0.1` — the nginx map in georgyo/nix-conf), so the lobby/game REST calls work from
+localhost too. Serving from an origin outside that list gets no
+`Access-Control-Allow-Origin` back and the authenticated calls are blocked.
+
+## Deploy
+
+Every push to `master` publishes the Nix-built release bundle to GitHub Pages at
+**https://ocaml.avalon.onl** (the `deploy-pages` job in `.github/workflows/nix.yml`; the
+custom domain is configured in the repo's Pages settings). The REST API at
+`api.avalon.onl` allows that origin in its CORS config (see georgyo/nix-conf,
+`hosts/hydra/containers/avalon/default.nix`).
 
 ## Notes
 

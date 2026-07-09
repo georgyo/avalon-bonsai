@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A port of the Vue 3 + Vuetify + Firebase Avalon game **client** (original at `../avalon`)
 to an OxCaml [Bonsai](https://github.com/janestreet/bonsai) web app (cont API), compiled
 with js_of_ocaml. It talks to the real production backend: Firebase Auth/Firestore and the
-REST server at `https://avalon.onl/api`.
+REST server at `https://api.avalon.onl/api`.
 
 ## Commands
 
@@ -31,8 +31,10 @@ re-materialize the opam resolution with `./scripts/update-package-defs.sh` (CI f
 drift otherwise).
 
 E2E tests (Playwright, hit the live production backend — they create real
-lobbies/games): see `tests/e2e/README.md`. They need the release bundle and launch
-Chromium with `--disable-web-security` because the API sends no CORS headers.
+lobbies/games): see `tests/e2e/README.md`. They need the release bundle.
+
+Deployment: every push to `master` publishes the Nix-built bundle to GitHub Pages at
+`https://ocaml.avalon.onl` (the `deploy-pages` job in `.github/workflows/nix.yml`).
 
 ## Hard build rules
 
@@ -79,14 +81,15 @@ Data flow: `State.init` initializes Firebase once (app/auth/firestore handles li
 `services` ref inside `state.ml`; access via `State.auth ()` etc., which raise before
 init). Firestore `on_snapshot` listeners push into a single `Bonsai.Expert.Var` holding
 the whole `Model`; the entire UI derives from that var. User actions call `Api.*`, which
-POST to `https://avalon.onl/api/<endpoint>` with a Firebase ID token in `X-Avalon-Auth` —
-`Api` and `Email_auth` take `~auth:Firebase.Auth.t` explicitly (they cannot read from
-`State`: state depends on api, not the reverse).
+POST to `https://api.avalon.onl/api/<endpoint>` with a Firebase ID token in
+`X-Avalon-Auth` — `Api` and `Email_auth` take `~auth:Firebase.Auth.t` explicitly (they
+cannot read from `State`: state depends on api, not the reverse).
 
-**CORS caveat**: the backend sends no `Access-Control-Allow-Origin` headers, so the direct
-API calls only work in a normal browser when the page is served from `avalon.onl`
-(same-origin). Local serving works for Firebase-only features (login, lobby list, stats);
-lobby/game REST actions need a CORS-relaxed browser (what the e2e tests do).
+**CORS**: `api.avalon.onl` answers preflights and reflects allowed origins only
+(`ocaml.avalon.onl`, `avalon.onl`, `localhost`, `127.0.0.1` — the nginx map in
+georgyo/nix-conf `hosts/hydra/containers/avalon/default.nix`), and its allow-headers
+include `X-Avalon-Auth`. So the API works from local serving and the production Pages
+site alike; an origin outside that list gets its calls blocked by the browser.
 
 The Firebase web API key in `src/state.ml` is public by design (standard for Firebase web
 apps), not a leaked secret.
