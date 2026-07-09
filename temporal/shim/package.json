@@ -1,0 +1,19 @@
+{
+  "name": "avalon-temporal-shim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendored Temporal polyfill for the avalon-bonsai client (populates globalThis.TemporalPolyfill for core's timezone_js_loader; embedded into main.bc.js via temporal/dune).",
+  "dependencies": {
+    "temporal-polyfill": "0.3.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.28.0",
+    "@babel/core": "^7.28.0",
+    "@babel/preset-env": "^7.28.0",
+    "esbuild": "^0.28.1",
+    "regenerator-runtime": "^0.14.1"
+  },
+  "scripts": {
+    "build": "bash build.sh"
+  }
+}

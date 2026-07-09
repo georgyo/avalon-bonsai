@@ -1,6 +1,15 @@
 (executable
  (name main)
- (libraries core bonsai bonsai_web virtual_dom js_of_ocaml avalon_components)
+ ; temporal_shim carries no modules; linking it embeds the vendored Temporal polyfill
+ ; that core's timezone loader needs on browsers without native Temporal (Safari).
+ (libraries
+  core
+  bonsai
+  bonsai_web
+  virtual_dom
+  js_of_ocaml
+  avalon_components
+  temporal_shim)
  (flags
   (:standard -w +70 -warn-error +70))
  (preprocess

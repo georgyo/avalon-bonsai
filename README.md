@@ -20,6 +20,8 @@ src/         avalon — the js_of_ocaml / Bonsai client:
   style        co-located component CSS via ppx_css (replaces Vuetify's styles)
   view         all UI components in Vdom (replaces the Vuetify components)
 firebase/    firebase — typed bindings to the Firebase v12 modular SDK
+temporal/    temporal_shim — vendored Temporal polyfill (core's jsoo timezone loader
+             needs it on browsers without native Temporal, i.e. Safari/iOS)
 test/        avalon_tests — inline_test suites over avalon_core
 bin/
   main.ml             entry point

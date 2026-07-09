@@ -47,6 +47,16 @@ jobs:
           npm run build
           git diff --exit-code ../vendor/firebase-shim.js
 
+      - name: Verify the vendored Temporal polyfill matches its sources
+        # Same deal as the Firebase shim: temporal/vendor/temporal-shim.js is committed
+        # (core's timezone loader needs it on browsers without native Temporal, i.e.
+        # Safari); rebuilding from the pinned package-lock.json must be a no-op.
+        run: |
+          cd temporal/shim
+          npm ci
+          npm run build
+          git diff --exit-code ../vendor/temporal-shim.js
+
       - name: Verify package-defs.lock matches flake.lock (materialized resolution not stale)
         # package-defs.json is the materialized opam resolution; package-defs.lock records
         # the opam repo input revs it was generated against. If flake.lock moved those revs

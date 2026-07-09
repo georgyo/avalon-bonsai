@@ -43,10 +43,13 @@ Deployment: every push to `master` publishes the Nix-built bundle to GitHub Page
 - **The `firebase/` library is deliberately Core-free** (Stdlib only, `js_of_ocaml` its
   only dependency). `open! Core` would shadow its `Error` module. Watch the Stdlib
   differences: `List.map f list` argument order, no `String.is_empty`.
-- The vendored Firebase bundle `firebase/vendor/firebase-shim.js` is committed and CI
-  verifies it: after any change under `firebase/shim/`, run `cd firebase/shim && npm ci &&
-  npm run build` and commit the result (comment-only `entry.mjs` changes are a no-op —
-  esbuild strips comments — but rebuild anyway to be sure).
+- The vendored JS bundles `firebase/vendor/firebase-shim.js` and
+  `temporal/vendor/temporal-shim.js` are committed and CI verifies them: after any change
+  under `firebase/shim/` or `temporal/shim/`, run `npm ci && npm run build` in that shim
+  directory and commit the result (comment-only `entry.mjs` changes are a no-op — esbuild
+  strips comments — but rebuild anyway to be sure). Embedded bundles must stay
+  generator-free ES5 (the build pipelines handle this); jsoo's embedded-JS printer mangles
+  ES2015 generators.
 - `dune fmt` reflows files via promotion — accept its output. It skips
   `src/components/ui.mli` (pre-existing ocamlformat warning 50); that's known.
 - The release jsoo build prints a benign `caml_array_create_float` missing-primitive
@@ -54,7 +57,7 @@ Deployment: every push to `master` publishes the Nix-built bundle to GitHub Page
 
 ## Architecture
 
-Five dune units, layered bottom-up:
+Six dune units, layered bottom-up:
 
 - `firebase/` — typed bindings to the Firebase v12 **modular** SDK, one file per upstream
   module (`app`, `auth`, `firestore`, `error`), mirroring the upstream API shapes; mli docs
@@ -74,6 +77,11 @@ Five dune units, layered bottom-up:
 - `src/components/` (`avalon_components`) — all UI as Vdom, using `ppx_css` (co-located
   styles, no stylesheet files) and `ppx_html`. Replaces Vuetify by hand-rolled components
   in `ui.ml`.
+- `temporal/` — a module-less carrier library embedding a vendored Temporal polyfill
+  (same shim/vendor pattern as `firebase/`). core's jsoo timezone loader drives the JS
+  Temporal API; Safari has no native `globalThis.Temporal`, and without the
+  `globalThis.TemporalPolyfill` fallback this provides, the app crashes at startup on
+  iOS with `"unknown zone" <local zone>` (blank page).
 - `bin/` — entry point; jsoo compiled with `--effects cps`; `runtime_avalon.js` stubs a
   missing jsoo primitive.
 

@@ -1,0 +1,15 @@
+; A module-less carrier library: linking it embeds the vendored Temporal polyfill
+; (built from shim/ to vendor/temporal-shim.js) into the js_of_ocaml executable, the
+; same mechanism firebase/ uses for the Firebase SDK. core's timezone_js_loader needs
+; globalThis.Temporal (or the globalThis.TemporalPolyfill fallback this bundle
+; provides) to load timezones in the browser; Safari has no native Temporal, and
+; without the polyfill the app crashes at startup with "unknown zone <local zone>".
+; Rebuild: cd shim && npm ci && npm run build.
+
+(library
+ (name temporal_shim)
+ (modules)
+ (flags
+  (:standard -w +70 -warn-error +70))
+ (js_of_ocaml
+  (javascript_files vendor/temporal-shim.js)))
