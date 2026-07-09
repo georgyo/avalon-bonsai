@@ -6,12 +6,11 @@ open Js_of_ocaml
 
 (* The requests go straight to the production REST server rather than a same-origin /api
    path, so the client needs no reverse proxy in front of it and can be served from
-   anywhere as static files. CORS caveat: avalon.onl currently sends no
-   Access-Control-Allow-Origin headers, so browsers only allow these calls when the page
-   itself is served from avalon.onl (same-origin). From any other origin (e.g. local
-   dev/e2e) the backend must allow the origin — or the test browser must relax CORS, as
-   tests/e2e does. *)
-let api_base = "https://avalon.onl/api"
+   anywhere as static files. api.avalon.onl (unlike avalon.onl) answers CORS preflights
+   and reflects allowed origins (ocaml.avalon.onl, avalon.onl, localhost — the map in
+   georgyo/nix-conf hosts/hydra/containers/avalon/default.nix), so the calls work
+   cross-origin from those. *)
+let api_base = "https://api.avalon.onl/api"
 
 let post
   ~(auth : Firebase.Auth.t)

@@ -1,7 +1,7 @@
 # End-to-end tests
 
 Playwright-driven multiplayer tests that exercise the full game against the **live**
-backend (Firebase + the `https://avalon.onl/api` REST server).
+backend (Firebase + the `https://api.avalon.onl/api` REST server).
 
 > For fast, offline, CI-friendly coverage of the pure game logic (role sizing, game-state
 > derivation, the achievement/badge engine) see the native unit tests in `test/` — run
@@ -12,9 +12,8 @@ backend (Firebase + the `https://avalon.onl/api` REST server).
 ## Files
 
 - `serve.cjs` — serves `_build/default/bin`. The client POSTs straight to
-  `https://avalon.onl/api` (no proxy); since that's cross-origin from localhost and the
-  backend sends no CORS headers, `play.cjs` launches its browser with
-  `--disable-web-security`.
+  `https://api.avalon.onl/api` (no proxy); that host serves CORS headers for localhost
+  origins, so no browser flags are needed.
 - `play.cjs` — spawns 5 anonymous players, creates/joins a lobby, starts a game, and plays
   it to completion. Reads each player's secret role and either succeeds every mission
   (`MODE=good`) or has evil players sabotage (`MODE=evil`).

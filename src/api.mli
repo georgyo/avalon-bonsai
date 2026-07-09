@@ -2,9 +2,9 @@ open! Core
 
 (** REST client (port of client/src/avalon-api-rest.ts). Each call fetches a fresh
     Firebase ID token from the given [auth] handle's current user, then POSTs JSON
-    directly to [https://avalon.onl/api/<endpoint>] with it (no same-origin proxy; see the
-    CORS note in the implementation). [on_ok] receives the parsed JSON response; [on_err]
-    receives an error message. *)
+    directly to [https://api.avalon.onl/api/<endpoint>] with it (no same-origin proxy;
+    that host serves CORS headers, see the note in the implementation). [on_ok] receives
+    the parsed JSON response; [on_err] receives an error message. *)
 
 val login
   :  ?on_ok:(Ffi.any -> unit)

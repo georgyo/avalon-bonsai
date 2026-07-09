@@ -1,7 +1,6 @@
-// Static server for the build dir. The client calls https://avalon.onl/api directly
-// (src/api.ml), so no /api reverse proxy is needed here anymore — but that also means the
-// API is cross-origin from localhost and avalon.onl sends no CORS headers, so the e2e
-// driver (play.cjs) launches its browser with web security disabled.
+// Static server for the build dir. The client calls https://api.avalon.onl/api directly
+// (src/api.ml), so no /api reverse proxy is needed here — that host serves CORS headers
+// for localhost origins, so a stock browser works.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
