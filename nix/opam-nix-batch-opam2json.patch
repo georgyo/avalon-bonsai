@@ -1,0 +1,69 @@
+--- a/src/opam.nix
++++ b/src/opam.nix
+@@ -616,6 +616,57 @@
+         };
+ 
+       packageFiles = mapAttrs findPackage packages;
++
++      # Convert every non-local opam file (and legacy sibling `url` file) to
++      # JSON in a single derivation instead of one import-from-derivation
++      # build per file. Nix's evaluator blocks on each IFD build in sequence,
++      # so per-file conversion serializes hundreds of tiny builds; batching
++      # them makes the evaluator block only once, and the conversions run in
++      # parallel inside the build. The per-package result is content-identical
++      # to `importOpam opamFile`.
++      batchManifest = concatLists (
++        mapAttrsToList (
++          name: v:
++          optionals (!(v ? pkgdef)) (
++            [
++              "${v.opamFile}"
++              "${name}.json"
++            ]
++            ++ optionals (pathExists "${dirOf v.opamFile}/url") [
++              "${dirOf v.opamFile}/url"
++              "${name}.url.json"
++            ]
++          )
++        ) packageFiles
++      );
++      batchJson =
++        runCommand "opam2json-batch"
++          {
++            preferLocalBuild = true;
++            allowSubstitutes = false;
++            manifest = concatStringsSep "\n" batchManifest;
++            passAsFile = [ "manifest" ];
++          }
++          ''
++            mkdir $out
++            xargs -d '\n' -n 2 -r -P "''${NIX_BUILD_CORES:-0}" \
++              sh -c 'exec ${opam2json}/bin/opam2json "$1" > "$out/$2"' sh \
++              < "$manifestPath"
++          '';
++      importOpamBatched =
++        name: opamFile:
++        let
++          opamContents = fromJSON (readFile "${batchJson}/${name}.json");
++        in
++        if opamContents ? url || !pathExists "${dirOf opamFile}/url" then
++          opamContents
++        else
++          opamContents
++          // {
++            url = {
++              section = fromJSON (readFile "${batchJson}/${name}.url.json");
++            };
++          };
+     in
+     mapAttrs (
+       _:
+@@ -625,7 +676,7 @@
+         version,
+         ...
+       }@args:
+-      (builtins.removeAttrs args [ "pkgdef" ]) // args.pkgdef or (importOpam opamFile)
++      (builtins.removeAttrs args [ "pkgdef" ]) // args.pkgdef or (importOpamBatched name opamFile)
+     ) packageFiles;
+ 
+   /**

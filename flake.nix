@@ -98,6 +98,21 @@
           else
             null;
 
+        # Evaluating `materialize` forces one `<pkg>.opam.json` import-from-derivation
+        # build per resolved package (~295 of them), and Nix's single-threaded evaluator
+        # blocks on each in sequence — that serialization is most of a regen's wall time.
+        # This patch batches all the opam2json conversions in queryToDefs into ONE
+        # derivation (content-identical per-package results, verified byte-identical
+        # package-defs.json). Behavior-preserving and upstreamable; rebase or drop it if
+        # an opam-nix bump reworks queryToDefs (applyPatches then fails loudly, and the
+        # CI drift check guards the output either way). Only `onSolver` imports this —
+        # the normal build path never evaluates it.
+        opamNixPatched = pkgs.applyPatches {
+          name = "opam-nix-batch-opam2json";
+          src = opam-nix;
+          patches = [ ./nix/opam-nix-batch-opam2json.patch ];
+        };
+
         # opam-nix's public API has no solver-timeout knob (resolveArgs.env only feeds
         # `opam admin list --environment`, i.e. opam *package* variables for dependency
         # filters — not process env), so build a second copy of its lib just for
@@ -106,7 +121,7 @@
         # derivation that runs the solver — so the wrap cannot affect package builds, and
         # the normal build path keeps using the stock `on` lib untouched. Drop this once
         # opam-nix grows a timeout knob upstream.
-        onSolver = import (opam-nix.outPath + "/src/opam.nix") {
+        onSolver = import (opamNixPatched + "/src/opam.nix") {
           # A shallow attr update, NOT pkgs.extend: extending re-evaluates the whole
           # nixpkgs fixpoint, where packages that `inherit (opam) version src`
           # (opam-installer, pulled in by opam2json) would break against the version-less
