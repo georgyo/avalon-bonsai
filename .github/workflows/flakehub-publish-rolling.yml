@@ -13,7 +13,8 @@ jobs:
       - uses: "actions/checkout@v6"
         with:
           persist-credentials: false
-      - uses: "DeterminateSystems/determinate-nix-action@v3"
+      - uses: "DeterminateSystems/determinate-nix-action@main"
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: "DeterminateSystems/flakehub-push@main"
         with:
           name: "georgyo/avalon-bonsai"
