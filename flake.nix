@@ -78,11 +78,12 @@
           ppx_inline_test = "*";
         };
 
-        # Resolving the query against the large oxcaml opam repo runs opam's solver for >60s,
-        # which trips OPAMSOLVERTIMEOUT under `nix build` IFD on a slow CI runner. opam-nix
-        # gives no way to raise that timeout, so instead we MATERIALIZE the resolution: run the
-        # solver once locally and commit its output (package-defs.json). CI then reads that file
-        # via materializedDefsToScope and never runs the solver at all. Regenerate with:
+        # Resolving the query against the large oxcaml opam repo runs opam's solver for
+        # >60s, which trips opam's default 60s OPAMSOLVERTIMEOUT on a slow machine. So we
+        # MATERIALIZE the resolution: run the solver once locally (with the timeout raised
+        # to 300s via `onSolver` below) and commit its output (package-defs.json). CI then
+        # reads that file via materializedDefsToScope and never runs the solver at all.
+        # Regenerate with:
         #   ./scripts/update-package-defs.sh
         #
         # Only defined on x86_64-linux: evaluating it runs the opam solver via
@@ -90,12 +91,43 @@
         # aarch64-linux variant cannot even build on an x86_64 host.
         materialize =
           if system == "x86_64-linux" then
-            on.materialize {
+            onSolver.materialize {
               inherit repos;
               regenCommand = [ "./scripts/update-package-defs.sh" ];
             } query
           else
             null;
+
+        # opam-nix's public API has no solver-timeout knob (resolveArgs.env only feeds
+        # `opam admin list --environment`, i.e. opam *package* variables for dependency
+        # filters — not process env), so build a second copy of its lib just for
+        # `materialize`, with `opam` wrapped to default OPAMSOLVERTIMEOUT to 300s.
+        # opam.nix uses `pkgs.opam` in exactly one place — the internal `resolve`
+        # derivation that runs the solver — so the wrap cannot affect package builds, and
+        # the normal build path keeps using the stock `on` lib untouched. Drop this once
+        # opam-nix grows a timeout knob upstream.
+        onSolver = import (opam-nix.outPath + "/src/opam.nix") {
+          # A shallow attr update, NOT pkgs.extend: extending re-evaluates the whole
+          # nixpkgs fixpoint, where packages that `inherit (opam) version src`
+          # (opam-installer, pulled in by opam2json) would break against the version-less
+          # wrapper. opam.nix only does attribute lookups on this set, so `//` is enough.
+          pkgs = pkgs // {
+            opam = pkgs.symlinkJoin {
+              name = "opam-solver-timeout";
+              paths = [ pkgs.opam ];
+              nativeBuildInputs = [ pkgs.makeWrapper ];
+              postBuild = "wrapProgram $out/bin/opam --set-default OPAMSOLVERTIMEOUT 300";
+            };
+            # opam-nix requires opam2json 0.4; mirror its own flake.nix fallback so a
+            # future nixpkgs bump past 0.4 doesn't break this re-import.
+            opam2json =
+              if builtins.elem (pkgs.opam2json.version or null) [ "0.4" ] then
+                pkgs.opam2json
+              else
+                (opam-nix.inputs.opam2json.overlay pkgs pkgs).opam2json;
+          };
+          inherit (opam-nix.inputs) opam-repository opam-overlays mirage-opam-overlays;
+        };
 
         scope = (on.materializedDefsToScope { } ./package-defs.json).overrideScope overlay;
 
