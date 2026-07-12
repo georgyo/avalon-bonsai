@@ -14,7 +14,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: "DeterminateSystems/determinate-nix-action@main"
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: "DeterminateSystems/flakehub-cache-action@v3"
       - uses: "DeterminateSystems/flakehub-push@main"
         with:
           name: "georgyo/avalon-bonsai"
