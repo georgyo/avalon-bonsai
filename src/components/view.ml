@@ -45,7 +45,7 @@ let app (local_ graph) =
       then
         div
           ~attrs:[ Ui.container; Ui.center; Ui.fill ]
-          [ {%html.jsx|<div *{[ Ui.spinner_lg ]}></div>|} ]
+          [ {%html|<div *{[ Ui.spinner_lg ]}></div>|} ]
       else if not (D.is_logged_in m)
       then div ~attrs:[ Ui.container; Ui.center ] [ login ]
       else (
@@ -56,9 +56,9 @@ let app (local_ graph) =
           then lobby
           else board
         in
-        {%html.jsx|<div>%{toolbar}<div *{[ Ui.container ]}>%{main}</div></div>|})
+        {%html|<div>%{toolbar}<div *{[ Ui.container ]}>%{main}</div></div>|})
   in
-  {%html.jsx|<div *{[ Ui.app ]}>%{content}</div>|}
+  {%html|<div *{[ Ui.app ]}>%{content}</div>|}
 ;;
 
 let run_app () =

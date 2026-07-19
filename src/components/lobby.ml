@@ -165,7 +165,7 @@ let lobby_select (local_ graph) =
       ; Stats.stats_display (Option.bind m.user ~f:(fun u -> u.stats)) m.global_stats
       ]
   in
-  {%html.jsx|
+  {%html|
     <div *{[ Style.lobby_select ]}>
       <div *{[ Ui.col; Ui.center; Style.lobby_inner ]}>*{children}</div>
     </div>
@@ -194,7 +194,7 @@ let lobby_player_list (local_ graph) =
   let ghost =
     Dnd.dragged_element dnd graph ~f:(fun name _graph ->
       let%arr name in
-      {%html.jsx|<div *{[ Style.drag_ghost ]}>#{name}</div>|})
+      {%html|<div *{[ Style.drag_ghost ]}>#{name}</div>|})
   in
   Ui.modal
     kick_target
@@ -268,7 +268,7 @@ let lobby_player_list (local_ graph) =
     in
     let prepend = div ~attrs:[ Ui.li_prepend ] (reorder @ [ prepend_icon ]) in
     let li_attrs = if can_reorder then [ Dnd.drop_target dnd ~id:idx ] else [] in
-    {%html.jsx|
+    {%html|
       <li class="v-list-item" *{li_attrs}>
         %{prepend}
         <div *{[ Ui.li_title ]}>#{player}</div>
@@ -277,7 +277,7 @@ let lobby_player_list (local_ graph) =
     |}
   in
   let items = List.mapi m.player_list ~f:item in
-  {%html.jsx|
+  {%html|
     <div *{[ Dnd.sentinel dnd ~name:"lobby-players" ]}>
       <ul class="v-list">*{items}</ul>
       %{ghost}
@@ -312,7 +312,7 @@ let game_lobby (local_ graph) =
       Some
         (N.div
            [ N.text "Need at least 5 players! Invite your friends with the lobby code:"
-           ; {%html.jsx|<div *{[ Style.lobby_code ]}>#{lobby_name}</div>|}
+           ; {%html|<div *{[ Style.lobby_code ]}>#{lobby_name}</div>|}
            ])
     else if num_players > 10
     then Some (N.text "Cannot start game with more than 10 players")
@@ -338,19 +338,19 @@ let game_lobby (local_ graph) =
   let seating_hint =
     if D.is_admin m && num_players > 2
     then
-      {%html.jsx|<p *{[ Ui.caption; Style.hint_on_dark ]}>Use the arrows to set seating order</p>|}
+      {%html|<p *{[ Ui.caption; Style.hint_on_dark ]}>Use the arrows to set seating order</p>|}
     else N.none
   in
   let roles_col =
     if valid_team_size
     then
-      {%html.jsx|<div *{[ Ui.col6 ]}><p *{[ Ui.label ]}>Special Roles Available</p>%{roles}</div>|}
+      {%html|<div *{[ Ui.col6 ]}><p *{[ Ui.label ]}>Special Roles Available</p>%{roles}</div>|}
     else N.none
   in
   let counts =
     if valid_team_size
     then
-      {%html.jsx|<div *{[ Ui.row; Ui.center ]}><p *{[ Ui.text_h6; Style.on_dark ]}>%{textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil}</p></div>|}
+      {%html|<div *{[ Ui.row; Ui.center ]}><p *{[ Ui.text_h6; Style.on_dark ]}>%{textf "%d players: %d good, %d evil" num_players (num_players - num_evil) num_evil}</p></div>|}
     else N.none
   in
   let start_area =
@@ -370,7 +370,7 @@ let game_lobby (local_ graph) =
     ; A.on_click (fun _ -> set_in_game_log (not in_game_log))
     ]
   in
-  {%html.jsx|
+  {%html|
     <div *{[ Ui.container ]}>
       <div *{[ Ui.row; Ui.wrap; Ui.start ]}>
         <div *{[ Ui.col6 ]}>

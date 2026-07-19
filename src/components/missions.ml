@@ -150,5 +150,5 @@ let game_missions (local_ graph) =
       | Some mission -> panel active mission
       | None -> N.none
     in
-    {%html.jsx|<div>%{strip}%{panel_node}</div>|}
+    {%html|<div>%{strip}%{panel_node}</div>|}
 ;;

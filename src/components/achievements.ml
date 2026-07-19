@@ -23,7 +23,7 @@ let achievements (g : Game.t) =
     then N.none
     else (
       let badge (b : Analysis.badge) =
-        {%html.jsx|
+        {%html|
           <div *{[ Ui.pt_2 ]}>
             %{card ~attrs:[ Style.achievement ]
                  [ card_title ~attrs:[ Ui.title_bar ] [ fa ~color:"gold" "fas" "fa-trophy"; div ~attrs:[ Ui.text_h6 ] [ N.text b.title ] ]
@@ -33,7 +33,7 @@ let achievements (g : Game.t) =
         |}
       in
       let badge_nodes = List.map badges ~f:badge in
-      {%html.jsx|
+      {%html|
         <div *{[ Ui.pt_6 ]}>
           <div *{[ Ui.text_h4; Ui.center ]}>Achievements</div>
           *{badge_nodes}

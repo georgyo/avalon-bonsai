@@ -24,7 +24,7 @@ module Style =
 
 (* a small "someone else is acting" indicator shared by the four waiting branches *)
 let waiting_row text =
-  {%html.jsx|<div *{[ Style.waiting ]}><span *{[ Ui.spinner ]}></span>#{text}</div>|}
+  {%html|<div *{[ Style.waiting ]}><span *{[ Ui.spinner ]}></span>#{text}</div>|}
 ;;
 
 (* Fire [reset] whenever the active (mission, proposal) changes, to clear optimistic
@@ -79,7 +79,7 @@ let team_proposal_action ~selected (local_ graph) =
       then
         div
           ~attrs:[ Ui.col; Ui.center ]
-          [ {%html.jsx|<div *{[ Ui.center ]}>%{textf "Propose a team of %d" team_size}</div>|}
+          [ {%html|<div *{[ Ui.center ]}>%{textf "Propose a team of %d" team_size}</div>|}
           ; btn
               ~attrs:[ Ui.primary ]
               ~disabled:(not valid)
@@ -233,7 +233,7 @@ let mission_action (local_ graph) =
         N.div
           [ (if String.is_empty error
              then N.none
-             else {%html.jsx|<div *{[ Ui.field_error; Ui.center ]}>#{error}</div>|})
+             else {%html|<div *{[ Ui.field_error; Ui.center ]}>#{error}</div>|})
           ; div
               ~attrs:[ Style.action_buttons ]
               [ btn

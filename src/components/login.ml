@@ -65,7 +65,7 @@ let user_login (local_ graph) =
   let alert =
     match m.confirming_email_error with
     | Some e ->
-      {%html.jsx|<div *{[ Style.alert_error ]}>%{textf "%s Please try logging in again." e}</div>|}
+      {%html|<div *{[ Style.alert_error ]}>%{textf "%s Please try logging in again." e}</div>|}
     | None -> N.none
   in
   let strip =
@@ -111,14 +111,14 @@ let user_login (local_ graph) =
       [ btn ~attrs:[ Ui.primary ] ~on_click:anon [ N.text "Login" ]; field_err ]
   in
   let heading =
-    {%html.jsx|<span *{[ Style.welcome_heading ]}>Avalon: The Resistance <span *{[ Style.online ]}>Online</span></span>|}
+    {%html|<span *{[ Style.welcome_heading ]}>Avalon: The Resistance <span *{[ Style.online ]}>Online</span></span>|}
   in
   let subtitle =
-    {%html.jsx|<p *{[ Ui.mt_4 ]}><span *{[ Ui.subtitle ]}>A game of social deduction for 5 to 10 people, now on desktop and mobile.</span></p>|}
+    {%html|<p *{[ Ui.mt_4 ]}><span *{[ Ui.subtitle ]}>A game of social deduction for 5 to 10 people, now on desktop and mobile.</span></p>|}
   in
   card
     ~attrs:[ Ui.welcome ]
-    [ {%html.jsx|
+    [ {%html|
         <div *{[ Ui.col; Ui.center ]}>
           %{alert}
           %{card_title [ heading; subtitle ]}

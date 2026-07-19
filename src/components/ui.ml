@@ -175,19 +175,19 @@ let swap_at (l : 'a list) i =
 ;;
 
 (* ---- building blocks, rendered with ppx_html + the Style module ---- *)
-let div ?(attrs = []) children = {%html.jsx|<div *{attrs}>*{children}</div>|}
-let spanc ?(attrs = []) children = {%html.jsx|<span *{attrs}>*{children}</span>|}
+let div ?(attrs = []) children = {%html|<div *{attrs}>*{children}</div>|}
+let spanc ?(attrs = []) children = {%html|<span *{attrs}>*{children}</span>|}
 
 let card ?(attrs = []) children =
-  {%html.jsx|<div *{Style.card :: attrs}>*{children}</div>|}
+  {%html|<div *{Style.card :: attrs}>*{children}</div>|}
 ;;
 
 let card_title ?(attrs = []) children =
-  {%html.jsx|<div *{Style.card_title :: attrs}>*{children}</div>|}
+  {%html|<div *{Style.card_title :: attrs}>*{children}</div>|}
 ;;
 
 let card_text ?(attrs = []) children =
-  {%html.jsx|<div *{Style.card_text :: attrs}>*{children}</div>|}
+  {%html|<div *{Style.card_text :: attrs}>*{children}</div>|}
 ;;
 
 let btn ?(attrs = []) ?(disabled = false) ?(loading = false) ~on_click children =
@@ -197,10 +197,10 @@ let btn ?(attrs = []) ?(disabled = false) ?(loading = false) ~on_click children 
   (* keep the label while loading (prepend the spinner) so the button doesn't collapse *)
   let children =
     if loading
-    then {%html.jsx|<span *{[ Style.spinner ]}></span>|} :: children
+    then {%html|<span *{[ Style.spinner ]}></span>|} :: children
     else children
   in
-  {%html.jsx|<button *{attrs} on_click=%{fun _ -> on_click}>*{children}</button>|}
+  {%html|<button *{attrs} on_click=%{fun _ -> on_click}>*{children}</button>|}
 ;;
 
 let fa ?(color = "") kind name =
@@ -221,7 +221,7 @@ let team_icon (t : team) =
 (* FontAwesome icon stacking; [fa-layers] is kept as a literal class (it is the external
    library's hook, styled globally in index.html). *)
 let fa_layers ?(attrs = []) children =
-  {%html.jsx|<span *{A.class_ "fa-layers" :: attrs}>*{children}</span>|}
+  {%html|<span *{A.class_ "fa-layers" :: attrs}>*{children}</span>|}
 ;;
 
 (* A centered, dimmed, focus-trapped, Esc/click-outside-closable modal (toplayer), shown
@@ -268,19 +268,19 @@ let text_field
     (Style.text_field :: attrs)
     @ [ A.type_ typ
       ; A.placeholder placeholder
-      ; A.value_prop value
+      ; A.value value
       ; A.on_input (fun _ s -> on_input s)
       ]
     @ extra
   in
-  {%html.jsx|<input *{all} />|}
+  {%html|<input *{all} />|}
 ;;
 
 (* inline error text (named [error_text] to leave the [field_error] class accessor free) *)
 let error_text error =
   if String.is_empty error
   then N.none
-  else {%html.jsx|<div *{[ Style.field_error ]}>#{error}</div>|}
+  else {%html|<div *{[ Style.field_error ]}>#{error}</div>|}
 ;;
 
 (* A styled, touch-capable hover tooltip (toplayer), replacing bare [title=] attributes:
@@ -303,12 +303,12 @@ let tab_strip ?(tab_attrs = []) ~active ~on_select labels =
       label
   in
   let tabs = List.mapi labels ~f:tab_btn in
-  {%html.jsx|<div *{[ Style.tabs ]}>*{tabs}</div>|}
+  {%html|<div *{[ Style.tabs ]}>*{tabs}</div>|}
 ;;
 
 (* mailto feedback link, styled as a button (port of the Vue "Email"/"Send feedback" btns) *)
 let feedback_link label =
-  {%html.jsx|<a *{[ Style.btn; Style.mt_4 ]} href="mailto:avalon@shamm.as" target="_blank">%{fa "fas" "fa-envelope-square"} #{label}</a>|}
+  {%html|<a *{[ Style.btn; Style.mt_4 ]} href="mailto:avalon@shamm.as" target="_blank">%{fa "fas" "fa-envelope-square"} #{label}</a>|}
 ;;
 
 (* ---- shared style-class accessors re-exported for use across component modules ----

@@ -141,7 +141,7 @@ let end_node (g : Game.t) ~close =
     let body =
       div
         ~attrs:[ Ui.col; Ui.center ]
-        [ {%html.jsx|<div *{[ Style.endgame_message; Ui.fw ]}>#{o.message}</div>|}
+        [ {%html|<div *{[ Style.endgame_message; Ui.fw ]}>#{o.message}</div>|}
         ; assassinated
         ; div
             ~attrs:[ Style.endgame_table_wrap ]

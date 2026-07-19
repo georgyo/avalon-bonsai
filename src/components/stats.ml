@@ -87,7 +87,7 @@ let stats_display (stats : stats option) (global : stats option) =
            @ global_rows)
       ]
   in
-  {%html.jsx|
+  {%html|
     <div *{[ Ui.col; Ui.center; Style.stats_wrap ]}>
       %{table}
       <div *{[ Ui.pt_2 ]}><div>%{textf "Total Playtime: %s" playtime}</div></div>

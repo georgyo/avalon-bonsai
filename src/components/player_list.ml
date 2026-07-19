@@ -173,7 +173,7 @@ let game_player_list ~selected ~set_selected (local_ graph) =
       (* the checkbox and the name live in one <label> (display: contents, so the flex row
          layout is untouched): clicking the name toggles the box, and screen readers
          announce the player's name for it *)
-      {%html.jsx|
+      {%html|
         <li class="v-list-item">
           <label *{[ Ui.li_label ]}>
             <div *{[ Ui.li_prepend ]}>%{checkbox}</div>
@@ -185,7 +185,7 @@ let game_player_list ~selected ~set_selected (local_ graph) =
       |}
     in
     let items = List.map (Game.players g) ~f:item in
-    {%html.jsx|<ul class="v-list">*{items}</ul>|}
+    {%html|<ul class="v-list">*{items}</ul>|}
   | None, _ -> N.none
 ;;
 
@@ -214,7 +214,7 @@ let game_participants ~selected ~set_selected (local_ graph) =
         ~on_select:(fun i -> set_tab (if i = 0 then "players" else "roles"))
         [ [ N.text "Players" ]; [ N.text "Roles" ] ]
     in
-    {%html.jsx|
+    {%html|
       <div>
         %{strip}
         %{body}

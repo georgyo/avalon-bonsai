@@ -55,7 +55,7 @@ let selectable_role_list (local_ graph) =
     (* the checkbox and the role name live in one <label> (display: contents, so the flex
        row layout is untouched): clicking the name toggles the box, and screen readers
        announce the role's name for it *)
-    {%html.jsx|
+    {%html|
       <li class="v-list-item">
         <label *{[ Ui.li_label ]}>
           <div *{[ Ui.li_prepend ]}>%{checkbox}%{team_icon role.team}</div>
@@ -66,14 +66,14 @@ let selectable_role_list (local_ graph) =
     |}
   in
   let items = List.map Avalonlib.selectable_roles ~f:item in
-  {%html.jsx|<div><ul class="v-list">*{items}</ul></div>|}
+  {%html|<div><ul class="v-list">*{items}</ul></div>|}
 ;;
 
 (* static role display (in-game participants tab) *)
 let role_list_view (roles : role list) =
   let item (role : role) =
     let attrs = [ A.class_ "v-list-item"; Ui.tooltip_text role.description ] in
-    {%html.jsx|
+    {%html|
       <li *{attrs}>
         <div *{[ Ui.li_prepend ]}>%{team_icon role.team}</div>
         <div *{[ Ui.li_title ]}>#{role.name}</div>
@@ -81,5 +81,5 @@ let role_list_view (roles : role list) =
     |}
   in
   let items = List.map roles ~f:item in
-  {%html.jsx|<ul class="v-list">*{items}</ul>|}
+  {%html|<ul class="v-list">*{items}</ul>|}
 ;;

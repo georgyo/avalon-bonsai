@@ -53,7 +53,7 @@ let view_role_button (local_ graph) =
           card
             ~attrs:[ Style.sheet ]
             [ card_title
-                [ {%html.jsx|<div *{[ Ui.fw; Ui.center ]}>When the game starts, you will see your role here.</div>|}
+                [ {%html|<div *{[ Ui.fw; Ui.center ]}>When the game starts, you will see your role here.</div>|}
                 ]
             ; card_text
                 [ div
@@ -94,7 +94,7 @@ let view_role_button (local_ graph) =
                   ]
               ])
       in
-      {%html.jsx|<div class="bottom-sheet">%{body}</div>|})
+      {%html|<div class="bottom-sheet">%{body}</div>|})
     graph;
   let%arr m = State.value () in
   let activator =
@@ -103,7 +103,7 @@ let view_role_button (local_ graph) =
       ~on_click:(eff (fun () -> State.set_show_role_sheet true))
       [ mdi "account"; N.span [ N.text (D.user_name m) ] ]
   in
-  {%html.jsx|<div>%{activator}</div>|}
+  {%html|<div>%{activator}</div>|}
 ;;
 
 (* ---- QuitButton (private) ---- *)
@@ -152,7 +152,7 @@ let quit_button (local_ graph) =
       ~on_click:open_
       [ mdi "exit-to-app"; spanc ~attrs:[ Style.quit_text ] [ N.text "Quit" ] ]
   in
-  {%html.jsx|<div>%{activator}</div>|}
+  {%html|<div>%{activator}</div>|}
 ;;
 
 (* ---- GameToolbar ---- *)
@@ -170,7 +170,7 @@ let game_toolbar (local_ graph) =
   if lobby_named && Option.is_some m.user
   then (
     let lobby_label = Option.value_map m.lobby ~default:"" ~f:(fun l -> l.name) in
-    {%html.jsx|
+    {%html|
       <div *{[ Style.toolbar ]}>
         <div *{[ Ui.row; Ui.center_v ]}>%{mdi "map-marker"}<span *{[ A.class_ "lobby-name"; Ui.fw ]}>#{lobby_label}</span></div>
         <div *{[ Ui.spacer ]}></div>
@@ -186,7 +186,7 @@ let game_toolbar (local_ graph) =
         ~on_click:(eff State.logout)
         [ mdi "exit-to-app"; N.text "Logout" ]
     in
-    {%html.jsx|
+    {%html|
       <div *{[ Style.toolbar ]}>
         <span *{[ Style.toolbar_email ]}>#{email}</span>
         <div *{[ Ui.spacer ]}></div>

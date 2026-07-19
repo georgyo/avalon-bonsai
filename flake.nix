@@ -27,10 +27,17 @@
       flake = false;
     };
     oxcaml-opam-dev = {
-      url = "github:oxcaml/opam-repository/dev";
+      url = "github:oxcaml/opam-repository/5.2.0minus38";
       flake = false;
     };
     opam-nix.inputs.opam-repository.follows = "opam-repository";
+  };
+
+  nixConfig = {
+    extra-substituters = [ "https://cache.fu.io" ];
+    extra-trusted-public-keys = [
+      "georgyo-1:2yY6X+H3y0xp9e94WQsjXlWNDX2ElWWrp5P89pQ9zPM="
+    ];
   };
 
   outputs =
@@ -156,19 +163,6 @@
               find . -name 'Makefile*' -type f \
                 -exec sed -i 's@^SHELL *= */usr/bin/env bash@SHELL = bash@' {} +
             '';
-          });
-
-          # zarith's opam entry points at an unpinned git branch
-          # (`git+https://github.com/avsm/zarith.git#oxcaml`), the one dependency that forced
-          # `--impure`. Pin it to an explicit rev + hash so the build is pure and reproducible.
-          # To update: bump the rev and refresh the hash with
-          #   nix-prefetch-git --url https://github.com/avsm/zarith.git --rev <rev>
-          zarith = prev.zarith.overrideAttrs (_: {
-            src = pkgs.fetchgit {
-              url = "https://github.com/avsm/zarith.git";
-              rev = "50e84d371ee53e9ff62e4e7fbf17bcb903d2d846";
-              hash = "sha256-+JLfOF+GCT9cfCDaIkqxMHvR0Fy6dX99F4bHIk4USn0=";
-            };
           });
         };
 

@@ -39,7 +39,7 @@ let game_board (local_ graph) =
   let participants = Player_list.game_participants ~selected ~set_selected graph in
   let actions = Actions.action_pane ~selected graph in
   let%arr missions and participants and actions in
-  {%html.jsx|
+  {%html|
     <div *{[ Style.game_board ]}>
       <div *{[ Style.game_section ]}>%{missions}</div>
       <div *{[ Style.game_section ]}>%{participants}</div>
