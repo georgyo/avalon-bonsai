@@ -23,11 +23,7 @@
       flake = false;
     };
     oxcaml-opam = {
-      url = "github:oxcaml/opam-repository";
-      flake = false;
-    };
-    oxcaml-opam-dev = {
-      url = "github:oxcaml/opam-repository/5.2.0minus38";
+      url = "github:oxcaml/opam-repository/main";
       flake = false;
     };
     opam-nix.inputs.opam-repository.follows = "opam-repository";
@@ -48,7 +44,6 @@
       opam-nix,
       opam-repository,
       oxcaml-opam,
-      oxcaml-opam-dev,
     }:
     # x86_64-linux is the verified system. aarch64-linux is declared but not yet
     # CI-verified (CI only builds x86_64-linux; a second cold OxCaml build would not fit
@@ -61,7 +56,6 @@
         on = opam-nix.lib.${system};
 
         repos = [
-          oxcaml-opam-dev
           oxcaml-opam
           opam-repository
         ];
