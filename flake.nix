@@ -9,15 +9,23 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     opam-nix = {
-      url = "github:tweag/opam-nix";
+      # A fork of tweag/opam-nix (branch `dev`) carrying four features this build needs,
+      # each of which used to be an out-of-tree hack here: the opam2json conversions of a
+      # query are batched into one derivation (fast materialization), `resolveArgs
+      # .solver-timeout` raises OPAMSOLVERTIMEOUT, `materialize` records the repositories
+      # it resolved against so `materializedDefsToScope` can reject a stale resolution,
+      # and `opam-nix-pin-git-refs` pins the git sources of package-defs.json. flake.lock
+      # pins the exact rev, so `dev` moving does not affect reproducibility.
+      url = "github:georgyo/opam-nix/dev";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-utils.url = "github:numtide/flake-utils";
 
     # The opam repositories the local 5.2.0+ox switch uses, pinned as flake inputs so the
-    # resolution is reproducible. Order = search priority: oxcaml dev, then oxcaml stable,
-    # then upstream opam-repository (an overlay, not a full fork — leaf packages come from
-    # upstream).
+    # resolution is reproducible. Order = search priority: oxcaml first, then upstream
+    # opam-repository (oxcaml is an overlay, not a full fork — leaf packages come from
+    # upstream). package-defs.json records this list, in order, and the build checks it —
+    # see the `scope` binding.
     opam-repository = {
       url = "github:ocaml/opam-repository";
       flake = false;
@@ -80,11 +88,10 @@
         };
 
         # Resolving the query against the large oxcaml opam repo runs opam's solver for
-        # >60s, which trips opam's default 60s OPAMSOLVERTIMEOUT on a slow machine. So we
-        # MATERIALIZE the resolution: run the solver once locally (with the timeout raised
-        # to 300s via `onSolver` below) and commit its output (package-defs.json). CI then
-        # reads that file via materializedDefsToScope and never runs the solver at all.
-        # Regenerate with:
+        # >60s, which trips opam's default 60s OPAMSOLVERTIMEOUT on a slow machine — hence
+        # `resolveArgs.solver-timeout`. So we MATERIALIZE the resolution: run the solver
+        # once locally and commit its output (package-defs.json). CI then reads that file
+        # via materializedDefsToScope and never runs the solver at all. Regenerate with:
         #   ./scripts/update-package-defs.sh
         #
         # Only defined on x86_64-linux: evaluating it runs the opam solver via
@@ -92,60 +99,26 @@
         # aarch64-linux variant cannot even build on an x86_64 host.
         materialize =
           if system == "x86_64-linux" then
-            onSolver.materialize {
+            on.materialize {
               inherit repos;
+              resolveArgs.solver-timeout = 300;
               regenCommand = [ "./scripts/update-package-defs.sh" ];
             } query
           else
             null;
 
-        # Evaluating `materialize` forces one `<pkg>.opam.json` import-from-derivation
-        # build per resolved package (~295 of them), and Nix's single-threaded evaluator
-        # blocks on each in sequence — that serialization is most of a regen's wall time.
-        # This patch batches all the opam2json conversions in queryToDefs into ONE
-        # derivation (content-identical per-package results, verified byte-identical
-        # package-defs.json). Behavior-preserving and upstreamable; rebase or drop it if
-        # an opam-nix bump reworks queryToDefs (applyPatches then fails loudly, and the
-        # CI drift check guards the output either way). Only `onSolver` imports this —
-        # the normal build path never evaluates it.
-        opamNixPatched = pkgs.applyPatches {
-          name = "opam-nix-batch-opam2json";
-          src = opam-nix;
-          patches = [ ./nix/opam-nix-batch-opam2json.patch ];
-        };
-
-        # opam-nix's public API has no solver-timeout knob (resolveArgs.env only feeds
-        # `opam admin list --environment`, i.e. opam *package* variables for dependency
-        # filters — not process env), so build a second copy of its lib just for
-        # `materialize`, with `opam` wrapped to default OPAMSOLVERTIMEOUT to 300s.
-        # opam.nix uses `pkgs.opam` in exactly one place — the internal `resolve`
-        # derivation that runs the solver — so the wrap cannot affect package builds, and
-        # the normal build path keeps using the stock `on` lib untouched. Drop this once
-        # opam-nix grows a timeout knob upstream.
-        onSolver = import (opamNixPatched + "/src/opam.nix") {
-          # A shallow attr update, NOT pkgs.extend: extending re-evaluates the whole
-          # nixpkgs fixpoint, where packages that `inherit (opam) version src`
-          # (opam-installer, pulled in by opam2json) would break against the version-less
-          # wrapper. opam.nix only does attribute lookups on this set, so `//` is enough.
-          pkgs = pkgs // {
-            opam = pkgs.symlinkJoin {
-              name = "opam-solver-timeout";
-              paths = [ pkgs.opam ];
-              nativeBuildInputs = [ pkgs.makeWrapper ];
-              postBuild = "wrapProgram $out/bin/opam --set-default OPAMSOLVERTIMEOUT 300";
-            };
-            # opam-nix requires opam2json 0.4; mirror its own flake.nix fallback so a
-            # future nixpkgs bump past 0.4 doesn't break this re-import.
-            opam2json =
-              if builtins.elem (pkgs.opam2json.version or null) [ "0.4" ] then
-                pkgs.opam2json
-              else
-                (opam-nix.inputs.opam2json.overlay pkgs pkgs).opam2json;
-          };
-          inherit (opam-nix.inputs) opam-repository opam-overlays mirage-opam-overlays;
-        };
-
-        scope = (on.materializedDefsToScope { } ./package-defs.json).overrideScope overlay;
+        # Passing `repos` checks them against the repositories package-defs.json was
+        # actually materialized against (recorded in the file as `__opam_nix_repos`): bump
+        # either opam repo input without re-materializing and evaluation fails,
+        # naming the repository that moved and quoting the regen command. That is what the
+        # old committed package-defs.lock + CI drift check did, except it now guards every
+        # build on every system rather than one CI job. No IFD: these repos are flake
+        # inputs, already realised, so their content identity is a plain string.
+        #
+        # The check is positional, and both call sites read this same `repos` binding, so
+        # they cannot drift apart. If a repo is ever added for materialization only, pass
+        # `recordRepos` to keep the two lists aligned.
+        scope = (on.materializedDefsToScope { inherit repos; } ./package-defs.json).overrideScope overlay;
 
         overlay = final: prev: {
           # The OxCaml compiler build assumes a couple of things the pure Nix sandbox lacks:
@@ -216,12 +189,23 @@
         packages = {
           default = avalon-bonsai;
           avalon-bonsai = avalon-bonsai;
+
+          # A git source whose fragment is a branch rather than an explicit sha1 cannot be
+          # fetched in pure evaluation mode, which would defeat materialization. This
+          # script rewrites any such source in package-defs.json to the commit it resolves
+          # to. Nothing needs it as of the 5.2.0minus38 oxcaml repo (zarith, which used to,
+          # now resolves to a tarball), so it is a no-op guard: update-package-defs.sh runs
+          # it after every re-materialization and CI asserts `--check`, so an opam repo
+          # bump that reintroduces a branch source is caught instead of breaking the build.
+          # Re-exported from the locked opam-nix input so the script and the library that
+          # reads its output are always the same rev.
+          inherit (opam-nix.packages.${system}) opam-nix-pin-git-refs;
         }
         # `./scripts/update-package-defs.sh` regenerates the committed resolution (e.g.
-        # after bumping the opam repo inputs) by building this package and copying it to
-        # package-defs.json (plus refreshing package-defs.lock). This is the only step
-        # that runs opam's solver; the normal build never does. x86_64-linux only — see
-        # the `materialize` binding above.
+        # after bumping the opam repo inputs) by building this package, copying it to
+        # package-defs.json and pinning its git sources. This is the only step that runs
+        # opam's solver; the normal build never does. x86_64-linux only — see the
+        # `materialize` binding above.
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           materialize = pkgs.runCommand "package-defs.json" { } "cp ${materialize} $out";
         };

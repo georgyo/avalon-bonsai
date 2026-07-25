@@ -62,18 +62,30 @@ nix develop           # dev shell with the toolchain
 ```
 
 The opam solver's resolution is materialized into the committed `package-defs.json`. After
-bumping flake inputs, regenerate it (this also refreshes `package-defs.lock`, the marker CI
-uses to detect a flake update without a re-materialization):
+bumping the opam repo flake inputs, regenerate it (this re-runs the solver and re-pins the
+git sources of the result):
 
 ```
 ./scripts/update-package-defs.sh
 ```
 
-CI (`.github/workflows/nix.yml`) builds the flake, after fast drift checks (vendored
-Firebase shim, `package-defs.lock`) and a `nix fmt` no-op check.
+There is no separate lock file to keep in sync: `package-defs.json` records the
+repositories it was materialized against, and the flake checks them, so bumping an opam
+repo input without regenerating fails the build at evaluation time and prints the command
+above.
+
+CI (`.github/workflows/nix.yml`) builds the flake, after fast drift checks (the vendored
+Firebase and Temporal shims) and a `nix fmt` no-op check.
 
 Notes on the flake:
 
+- opam-nix is the `georgyo/opam-nix` fork (branch `dev`, pinned by rev in `flake.lock`).
+  It adds what this build needs over upstream: batched opam2json conversion (a much
+  faster re-materialization), a `resolveArgs.solver-timeout` knob, materialization
+  provenance, and the `opam-nix-pin-git-refs` script, which pins any git source naming a
+  branch instead of a commit — pure evaluation cannot fetch those. Nothing needs it today,
+  so it runs as a guard: an opam repo bump that reintroduces such a source is caught by
+  CI's `--check` rather than breaking the build.
 - The nix devShell intentionally does **not** include `ocamlformat` or `ocaml-lsp`: they
   would require re-materializing the resolution with OxCaml-patched versions. Use the
   opam switch for those tools.

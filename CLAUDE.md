@@ -26,9 +26,11 @@ Output lands in `_build/default/bin/` (`index.html` + `main.bc.js`). The client 
 static; serve that directory with anything (`node tests/e2e/serve.cjs` serves it on :8123).
 
 Hermetic Nix build: `nix build .#default`; dev shell: `nix develop` (intentionally has no
-ocamlformat/ocaml-lsp — use the opam switch for those). After bumping flake inputs,
-re-materialize the opam resolution with `./scripts/update-package-defs.sh` (CI fails on
-drift otherwise).
+ocamlformat/ocaml-lsp — use the opam switch for those). opam-nix is the
+`georgyo/opam-nix` fork (branch `dev`). After bumping the opam repo flake inputs,
+re-materialize the opam resolution with `./scripts/update-package-defs.sh` — otherwise
+evaluation fails: `package-defs.json` records which repos it was materialized against and
+the flake checks them.
 
 E2E tests (Playwright, hit the live production backend — they create real
 lobbies/games): see `tests/e2e/README.md`. They need the release bundle.
