@@ -66,7 +66,7 @@ bumping the opam repo flake inputs, regenerate it (this re-runs the solver and r
 git sources of the result):
 
 ```
-./scripts/update-package-defs.sh
+nix run .#update-package-defs
 ```
 
 That also refreshes `package-defs.lock`, which records the opam repo revs the resolution

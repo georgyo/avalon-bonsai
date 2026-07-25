@@ -28,8 +28,9 @@ static; serve that directory with anything (`node tests/e2e/serve.cjs` serves it
 Hermetic Nix build: `nix build .#default`; dev shell: `nix develop` (intentionally has no
 ocamlformat/ocaml-lsp — use the opam switch for those). opam-nix is the
 `georgyo/opam-nix` fork (branch `dev`). After bumping the opam repo flake inputs,
-re-materialize the opam resolution with `./scripts/update-package-defs.sh` (CI fails on
-drift otherwise — it re-derives `package-defs.lock` from `flake.lock` and diffs).
+re-materialize the opam resolution with `nix run .#update-package-defs` (CI fails on
+drift otherwise — it re-derives `package-defs.lock` from `flake.lock` and diffs). The
+maintenance commands are flake apps, not scripts in the tree: `nix flake show` lists them.
 
 E2E tests (Playwright, hit the live production backend — they create real
 lobbies/games): see `tests/e2e/README.md`. They need the release bundle.

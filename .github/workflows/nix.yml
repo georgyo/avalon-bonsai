@@ -62,14 +62,6 @@ jobs:
           npm run build
           git diff --exit-code ../vendor/temporal-shim.js
 
-      - name: Verify package-defs.lock matches flake.lock (materialized resolution not stale)
-        # package-defs.json is the materialized opam resolution; package-defs.lock records
-        # the opam repo input revs it was generated against. If flake.lock moved those revs
-        # without a re-materialization (scripts/update-package-defs.sh), fail.
-        run: |
-          ./scripts/update-package-defs-lock.sh
-          git diff --exit-code package-defs.lock
-
   nix-build:
     needs: drift-checks
     runs-on: ubuntu-latest
@@ -82,6 +74,16 @@ jobs:
       - uses: Mic92/niks3-action@v1
         with:
           server-url: https://niks3.fu.io
+
+      - name: Verify package-defs.lock matches flake.lock (materialized resolution not stale)
+        # package-defs.json is the materialized opam resolution; package-defs.lock records
+        # the opam repo input revs it was generated against. If flake.lock moved those revs
+        # without a re-materialization (`nix run .#update-package-defs`), fail. This lives
+        # here rather than in drift-checks because it is a flake app now and needs Nix; it
+        # still runs before anything expensive is built.
+        run: |
+          nix run .#update-package-defs-lock
+          git diff --exit-code package-defs.lock
 
       - name: Verify every git source in package-defs.json is pinned to a commit
         # A git source without an explicit sha1 cannot be fetched in pure evaluation mode.
