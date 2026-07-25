@@ -107,18 +107,19 @@
           else
             null;
 
-        # Passing `repos` checks them against the repositories package-defs.json was
-        # actually materialized against (recorded in the file as `__opam_nix_repos`): bump
-        # either opam repo input without re-materializing and evaluation fails,
-        # naming the repository that moved and quoting the regen command. That is what the
-        # old committed package-defs.lock + CI drift check did, except it now guards every
-        # build on every system rather than one CI job. No IFD: these repos are flake
-        # inputs, already realised, so their content identity is a plain string.
-        #
-        # The check is positional, and both call sites read this same `repos` binding, so
-        # they cannot drift apart. If a repo is ever added for materialization only, pass
-        # `recordRepos` to keep the two lists aligned.
-        scope = (on.materializedDefsToScope { inherit repos; } ./package-defs.json).overrideScope overlay;
+        # NOTE: the staleness check is deliberately NOT enabled — passing `repos` here
+        # would make `materializedDefsToScope` compare them against the repositories
+        # package-defs.json was materialized against (recorded in it as
+        # `__opam_nix_repos`). It false-positives across Nix implementations: opam-nix
+        # identifies a repository by its store path, and Determinate Nix (what CI installs,
+        # `determinate: true`) resolves these two inputs to different store paths than
+        # upstream Nix does locally, for byte-identical content — same `narHash` in
+        # flake.lock, different `<hash>-source`. Enabling it turned every CI build into
+        # "the materialized package definitions are stale" (run 30162609745). Re-enable
+        # with `{ inherit repos; }` once opam-nix identifies repositories by something
+        # implementation-independent. The file still records the identities; nothing reads
+        # them. Staleness is guarded by package-defs.lock instead — see scripts/.
+        scope = (on.materializedDefsToScope { } ./package-defs.json).overrideScope overlay;
 
         overlay = final: prev: {
           # The OxCaml compiler build assumes a couple of things the pure Nix sandbox lacks:

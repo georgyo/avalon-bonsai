@@ -69,23 +69,24 @@ git sources of the result):
 ./scripts/update-package-defs.sh
 ```
 
-There is no separate lock file to keep in sync: `package-defs.json` records the
-repositories it was materialized against, and the flake checks them, so bumping an opam
-repo input without regenerating fails the build at evaluation time and prints the command
-above.
+That also refreshes `package-defs.lock`, which records the opam repo revs the resolution
+was generated against; CI fails if `flake.lock` moved them without a re-materialization.
 
 CI (`.github/workflows/nix.yml`) builds the flake, after fast drift checks (the vendored
-Firebase and Temporal shims) and a `nix fmt` no-op check.
+Firebase and Temporal shims, `package-defs.lock`) and a `nix fmt` no-op check.
 
 Notes on the flake:
 
 - opam-nix is the `georgyo/opam-nix` fork (branch `dev`, pinned by rev in `flake.lock`).
   It adds what this build needs over upstream: batched opam2json conversion (a much
-  faster re-materialization), a `resolveArgs.solver-timeout` knob, materialization
-  provenance, and the `opam-nix-pin-git-refs` script, which pins any git source naming a
+  faster re-materialization), a `resolveArgs.solver-timeout` knob, and the
+  `opam-nix-pin-git-refs` script, which pins any git source naming a
   branch instead of a commit — pure evaluation cannot fetch those. Nothing needs it today,
   so it runs as a guard: an opam repo bump that reintroduces such a source is caught by
-  CI's `--check` rather than breaking the build.
+  CI's `--check` rather than breaking the build. It also records which repositories a
+  resolution was materialized against, but that check is disabled: opam-nix compares
+  store paths, and Determinate Nix (CI) and upstream Nix (local) produce different ones
+  for identical content, so `package-defs.lock` remains the staleness guard.
 - The nix devShell intentionally does **not** include `ocamlformat` or `ocaml-lsp`: they
   would require re-materializing the resolution with OxCaml-patched versions. Use the
   opam switch for those tools.

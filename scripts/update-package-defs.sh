@@ -5,11 +5,11 @@
 # names a branch rather than a commit (pure evaluation cannot fetch those). Nothing needs
 # pinning today, so that step normally reports "nothing to pin"; it is there so an opam
 # repo bump that reintroduces a branch source is handled instead of breaking the build.
-# x86_64-linux only (see the `materialize` binding in flake.nix).
-#
-# There is no separate lock file to refresh: the materialized file records the repositories
-# it was resolved against, and flake.nix checks them on every build, so a flake update
-# without a re-materialization fails loudly at evaluation time.
+# x86_64-linux only (see the `materialize` binding in flake.nix). Finally it refreshes
+# package-defs.lock, the marker CI uses to detect a flake update without a
+# re-materialization. (opam-nix records that provenance in package-defs.json itself now,
+# but the check built on it is not portable across Nix implementations — see the `scope`
+# binding in flake.nix.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 out=$(nix build .#materialize --no-link --print-out-paths)
@@ -18,3 +18,4 @@ cp "$out" package-defs.json
 chmod u+w package-defs.json
 nix run .#opam-nix-pin-git-refs -- package-defs.json
 echo "wrote package-defs.json"
+./scripts/update-package-defs-lock.sh

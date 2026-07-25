@@ -10,9 +10,11 @@ name: Nix
 # The build is fully pure (no --impure): every git source in package-defs.json is pinned to
 # an explicit commit sha1 (scripts/update-package-defs.sh runs opam-nix-pin-git-refs after
 # re-materializing), and flake.lock pins the opam repositories, so resolution and fetching
-# are reproducible. package-defs.json also records the repositories it was materialized
-# against, so a flake update without a re-materialization fails at evaluation time rather
-# than silently building a stale resolution.
+# are reproducible. A flake update without a re-materialization is caught by the
+# package-defs.lock drift check below. (package-defs.json also records the repositories it
+# was materialized against, but opam-nix compares those as store paths, which differ
+# between Determinate Nix here and upstream Nix locally — see the `scope` binding in
+# flake.nix.)
 #
 # All third-party actions are pinned to full commit SHAs (tag noted alongside each pin).
 
@@ -59,6 +61,14 @@ jobs:
           npm ci
           npm run build
           git diff --exit-code ../vendor/temporal-shim.js
+
+      - name: Verify package-defs.lock matches flake.lock (materialized resolution not stale)
+        # package-defs.json is the materialized opam resolution; package-defs.lock records
+        # the opam repo input revs it was generated against. If flake.lock moved those revs
+        # without a re-materialization (scripts/update-package-defs.sh), fail.
+        run: |
+          ./scripts/update-package-defs-lock.sh
+          git diff --exit-code package-defs.lock
 
   nix-build:
     needs: drift-checks
