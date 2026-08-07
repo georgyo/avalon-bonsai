@@ -1,23 +1,5 @@
 name: Nix
 
-# Builds the client bundle hermetically from the opam-nix flake (flake.nix). This compiles
-# the OxCaml compiler and the Jane Street Bonsai preview packages from the oxcaml
-# opam-repository, so the FIRST run on a cold cache is very slow (tens of minutes). The Nix
-# store is cached to the GitHub Actions cache via nix-community/cache-nix-action, so
-# subsequent runs reuse the toolchain and are fast. For heavy use, point this at a Cachix
-# cache instead (the GHA cache is capped at 10 GB per repo, and the OxCaml closure is large).
-#
-# The build is fully pure (no --impure): every git source in package-defs.json is pinned to
-# an explicit commit sha1 (scripts/update-package-defs.sh runs opam-nix-pin-git-refs after
-# re-materializing), and flake.lock pins the opam repositories, so resolution and fetching
-# are reproducible. A flake update without a re-materialization is caught by the
-# package-defs.lock drift check below. (package-defs.json also records the repositories it
-# was materialized against, but opam-nix compares those as store paths, which differ
-# between Determinate Nix here and upstream Nix locally — see the `scope` binding in
-# flake.nix.)
-#
-# All third-party actions are pinned to full commit SHAs (tag noted alongside each pin).
-
 on:
   push:
     branches: [main, master]
@@ -70,7 +52,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: NixOS/nix-installer-action@main
       - uses: Mic92/niks3-action@v1
         with:
           server-url: https://niks3.fu.io
