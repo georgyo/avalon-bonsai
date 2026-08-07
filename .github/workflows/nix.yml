@@ -29,7 +29,7 @@ jobs:
         # package-lock.json must be a no-op, or someone changed the shim sources (or bumped
         # the SDK) without re-vendoring.
         run: |
-          cd firebase/shim
+          cd extjs/firebase/shim
           npm ci
           npm run build
           git diff --exit-code ../vendor/firebase-shim.js
@@ -39,7 +39,7 @@ jobs:
         # (core's timezone loader needs it on browsers without native Temporal, i.e.
         # Safari); rebuilding from the pinned package-lock.json must be a no-op.
         run: |
-          cd temporal/shim
+          cd extjs/temporal/shim
           npm ci
           npm run build
           git diff --exit-code ../vendor/temporal-shim.js
