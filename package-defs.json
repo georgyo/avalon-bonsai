@@ -581,6 +581,121 @@
       "  * Copyright (c) 2015, KC Sivaramakrishnan <sk826@cl.cam.ac.uk>",
       ""
     ],
+    "18edcc7126-omd-fix-infinite-recursion-bug.patch": [
+      "--- a/src/block_parser.ml",
+      "+++ b/src/block_parser.ml",
+      "@@ -330,9 +330,10 @@",
+      "       if off >= String.length s then (Buffer.contents buf, None)",
+      "       else",
+      "         match s.[off] with",
+      "-        | '\\n' -> (Buffer.contents buf, Some (succ off))",
+      "+        | '\\n' ->",
+      "+          (Buffer.contents buf, Some (succ off))",
+      "         | '\\r' ->",
+      "-            if cr_read then Buffer.add_char buf '\\r';",
+      "+          if cr_read then Buffer.add_char buf '\\r';",
+      "             loop true (succ off)",
+      "         | c ->",
+      "             if cr_read then Buffer.add_char buf '\\r';",
+      "@@ -345,10 +346,10 @@",
+      "     let link_defs = ref [] in",
+      "     let rec loop state = function",
+      "       | None ->",
+      "-          let blocks = finish link_defs state in",
+      "-          (blocks, List.rev !link_defs)",
+      "+        let blocks = finish link_defs state in",
+      "+        (blocks, List.rev !link_defs)",
+      "       | Some off ->",
+      "-          let s, off = read_line s off in",
+      "+        let s, off = read_line s off in",
+      "           loop (process link_defs state s) off",
+      "     in",
+      "     loop empty (Some 0)",
+      "--- a/src/parser.ml",
+      "+++ b/src/parser.ml",
+      "@@ -23,6 +23,10 @@",
+      " (** Raised when a parser fails, used for control flow rather than error",
+      "     handling *)",
+      " ",
+      "+exception Max_recursion_depth of string",
+      "+(** Raised when a function reaches the maximum recursion depth specified",
+      "+    (namely, in emphasis detection).  *)",
+      "+",
+      " (** Stateful parser combinators *)",
+      " module P : sig",
+      "   type state",
+      "@@ -966,9 +970,16 @@",
+      " ",
+      "   let rec parse_emph = function",
+      "     | (Emph (pre, _, q1, n1) as x1) :: xs when is_opener x1 ->",
+      "-        let rec loop acc = function",
+      "-          | (Emph (_, post, q2, n2) as x2) :: xs1 as xs",
+      "-            when is_closer x2 && q1 = q2 ->",
+      "+      let rec loop acc emphs depth =",
+      "+",
+      "+        if depth = 0 then ",
+      "+          raise (Max_recursion_depth ",
+      "+                   \"Max recursion depth reached on emphasis detection. \\",
+      "+                    Should your text actually be code?\");",
+      "+        let depth = depth - 1 in",
+      "+        match emphs with",
+      "+        | (Emph (_, post, q2, n2) as x2) :: xs1 as xs",
+      "+          when is_closer x2 && q1 = q2 ->",
+      "               (* At this point we have an openener followed by a closer. Both are of the same style (either * or _) *)",
+      "               if (is_opener x2 || is_closer x1) && not (is_emph_match n1 n2)",
+      "               then",
+      "@@ -987,9 +998,10 @@",
+      "                  *)",
+      "                 match find_next_emph xs1 with",
+      "                 | Some (_, _, _, n3) when is_emph_match n3 n2 ->",
+      "-                    let xs' = parse_emph xs in",
+      "-                    loop acc xs'",
+      "-                | _ -> loop (x2 :: acc) xs1",
+      "+                  let xs' = parse_emph xs in",
+      "+                    loop acc xs' depth",
+      "+                | _ ->",
+      "+                  loop (x2 :: acc) xs1 depth",
+      "               else",
+      "                 let xs =",
+      "                   if n1 >= 2 && n2 >= 2 then",
+      "@@ -1010,7 +1022,7 @@",
+      "                   else r",
+      "                 in",
+      "                 parse_emph r",
+      "-          | (Emph (_, _, q2, _) as x2) :: xs1 as xs when is_opener x2 ->",
+      "+        | (Emph (_, _, q2, _) as x2) :: xs1 as xs when is_opener x2 ->",
+      "               (*",
+      "                This case happens when we encounter a second opener delimiter. We look ahead for the next closer,",
+      "                and if the next closer is of the same style, we can match them together.",
+      "@@ -1029,12 +1041,12 @@",
+      "                 | None -> false",
+      "                 | Some (_, _, q3, _) -> q2 = q3",
+      "               in",
+      "-              if not is_next_closer_same then loop (x2 :: acc) xs1",
+      "-              else loop acc (parse_emph xs)",
+      "-          | x :: xs -> loop (x :: acc) xs",
+      "+              if not is_next_closer_same then loop (x2 :: acc) xs1 depth",
+      "+              else loop acc (parse_emph xs) depth",
+      "+          | x :: xs -> loop (x :: acc) xs depth",
+      "           | [] -> x1 :: List.rev acc",
+      "         in",
+      "-        loop [] xs",
+      "+        loop [] xs 10000  (* Default max depth of 10000 *)",
+      "     | x :: xs -> x :: parse_emph xs",
+      "     | [] -> []",
+      " ",
+      "@@ -1883,7 +1895,8 @@",
+      "         junk st;",
+      "         Buffer.add_char buf c;",
+      "         loop ~seen_link acc st",
+      "-    | exception Fail -> Pre.parse_emph (List.rev (text acc))",
+      "+    | exception Fail ->",
+      "+      Pre.parse_emph (List.rev (text acc))",
+      "   in",
+      "   loop ~seen_link:false [] st",
+      " ",
+      ""
+    ],
     "198af5e249-zarith+src+q.ml.patch": [
       "--- a/q.ml",
       "+++ b/q.ml",
@@ -6808,6 +6923,18 @@
       "   in",
       ""
     ],
+    "50a4e520a6-omd-fix-link-parsed-as-text-bug.patch": [
+      "--- a/src/parser.ml",
+      "+++ b/src/parser.ml",
+      "@@ -1890,5 +1890,5 @@",
+      "               loop ~seen_link acc st",
+      "         in",
+      "-        aux ~seen_link [] acc",
+      "+        aux ~seen_link:false [] acc",
+      "     | '[' -> reference_link ~seen_link Url acc st",
+      "     | ('*' | '_') as c ->",
+      ""
+    ],
     "51b412cfb1-ppxlib+traverse+ppxlib_traverse.ml.patch": [
       "--- a/traverse/ppxlib_traverse.ml",
       "+++ b/traverse/ppxlib_traverse.ml",
@@ -7767,59 +7894,6 @@
       "       | \"caml_int64_float_of_bits\", [ Int64 i ]",
       "         when match target with",
       "              | `JavaScript ->",
-      ""
-    ],
-    "6961394266-oxcaml-dune.patch": [
-      "diff --git a/otherlibs/stdune/src/array.mli b/otherlibs/stdune/src/array.mli",
-      "index 123c5cfd7b..de31c9177f 100644",
-      "--- a/otherlibs/stdune/src/array.mli",
-      "+++ b/otherlibs/stdune/src/array.mli",
-      "@@ -1,4 +1,4 @@",
-      "-include module type of Stdlib.ArrayLabels with type 'a t = 'a array",
-      "+include module type of Stdlib.ArrayLabels with type ('a : any mod separable) t = 'a array",
-      " ",
-      " val find_opt : f:('a -> bool) -> 'a t -> 'a option",
-      " val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool",
-      "diff --git a/otherlibs/stdune/src/string.ml b/otherlibs/stdune/src/string.ml",
-      "index 1234567..abcdefg 100644",
-      "--- a/otherlibs/stdune/src/string.ml",
-      "+++ b/otherlibs/stdune/src/string.ml",
-      "@@ -45,7 +45,7 @@ let uppercase = uppercase_ascii",
-      " let lowercase = lowercase_ascii",
-      " let index = index_opt",
-      "-let index_from = index_from_opt",
-      "+let index_from s i c = index_from_opt s i c",
-      " let rindex = rindex_opt",
-      "-let rindex_from = rindex_from_opt",
-      "+let rindex_from s i c = rindex_from_opt s i c",
-      " let break s ~pos = sub s ~pos:0 ~len:pos, sub s ~pos ~len:(length s - pos)",
-      " let is_empty s = length s = 0",
-      "diff --git a/src/dune_rules/merlin/merlin.ml b/src/dune_rules/merlin/merlin.ml",
-      "index 1234567..abcdefg 100644",
-      "--- a/src/dune_rules/merlin/merlin.ml",
-      "+++ b/src/dune_rules/merlin/merlin.ml",
-      "@@ -301,6 +301,6 @@ let comment_body = [^ '\\n' '\\r']*",
-      "     let b = Buffer.create 256 in",
-      "     let printf = Printf.bprintf b in",
-      "-    let print = Buffer.add_string b in",
-      "+    let print s = Buffer.add_string b s in",
-      "     print \"EXCLUDE_QUERY_DIR\\n\";",
-      "     Option.iter stdlib_dir ~f:(fun stdlib_dir ->",
-      "       printf \"STDLIB %s\\n\" (serialize_path stdlib_dir));",
-      "diff --git a/src/dune_sexp/lexer.mll b/src/dune_sexp/lexer.mll",
-      "index 1234567..abcdefg 100644",
-      "--- a/src/dune_sexp/lexer.mll",
-      "+++ b/src/dune_sexp/lexer.mll",
-      "@@ -129,7 +129,7 @@ let comment_body = [^ '\\n' '\\r']*",
-      "         state := Template (v::parts)",
-      "",
-      "-    let add_text   = Buffer.add_string text_buf",
-      "-    let add_text_c = Buffer.add_char text_buf",
-      "+    let add_text s  = Buffer.add_string text_buf s",
-      "+    let add_text_c c = Buffer.add_char text_buf c",
-      "   end",
-      " end",
-      " }",
       ""
     ],
     "69769c220f-ppxlib+src+common.mli.patch": [
@@ -33856,8 +33930,8 @@
     ".#update-package-defs"
   ],
   "__opam_nix_repos": [
-    "9jq6pzxyrklqiv4b1il3igy54x24xix9-source",
-    "im1p4h0h2sa0z4gz6gq64zxcqmaah5v4-source"
+    "j3hbwcx4kr1y5fpls9bbck3l3v88c45g-source",
+    "s503iln1qxh8f8qbfrk6vdqhcga20cfy-source"
   ],
   "abstract_algebra": {
     "authors": [
@@ -39400,7 +39474,8 @@
           }
         ],
         "val": [
-          "autoconf"
+          "autoconf",
+          "automake"
         ]
       },
       {
@@ -39603,7 +39678,7 @@
     "name": "conf-autoconf",
     "opam-version": "2.0",
     "synopsis": "Virtual package relying on autoconf installation",
-    "version": "0.2"
+    "version": "1"
   },
   "conf-gmp": {
     "authors": "nbraud",
@@ -40103,1426 +40178,6 @@
     "name": "conf-gmp",
     "opam-version": "2.0",
     "synopsis": "Virtual package relying on a GMP lib system installation",
-    "version": "5"
-  },
-  "conf-libffi": {
-    "authors": [
-      "Anthony Green"
-    ],
-    "bug-reports": "https://github.com/ocaml/opam-repository/issues",
-    "build": [
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "neq",
-                "rhs": "cygwinports"
-              }
-            ]
-          }
-        ],
-        "val": "pkgconf"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "neq",
-                "rhs": "cygwinports"
-              },
-              {
-                "id": "host-arch-x86_32:installed"
-              }
-            ]
-          }
-        ],
-        "val": "--personality=i686-w64-mingw32"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "neq",
-                "rhs": "cygwinports"
-              },
-              {
-                "id": "host-arch-x86_64:installed"
-              }
-            ]
-          }
-        ],
-        "val": "--personality=x86_64-w64-mingw32"
-      },
-      {
-        "conditions": [
-          {
-            "or": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "neq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "cygwinports"
-              }
-            ]
-          }
-        ],
-        "val": "pkg-config"
-      },
-      "libffi"
-    ],
-    "depends": [
-      {
-        "conditions": [
-          {
-            "id": "build"
-          }
-        ],
-        "val": "conf-pkg-config"
-      },
-      {
-        "group": [
-          {
-            "or": [
-              {
-                "and": [
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "neq",
-                            "rhs": "cygwinports"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "host-arch-x86_64"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "neq",
-                            "rhs": "cygwinports"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-libffi-x86_64"
-                  }
-                ]
-              },
-              {
-                "and": [
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "neq",
-                            "rhs": "cygwinports"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "host-arch-x86_32"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "neq",
-                            "rhs": "cygwinports"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-libffi-i686"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ],
-    "depexts": [
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "macos"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "homebrew"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "libffi"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "macos"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "macports"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "libffi"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "alpine"
-          }
-        ],
-        "val": [
-          "libffi-dev"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-family"
-            },
-            "relop": "eq",
-            "rhs": "debian"
-          }
-        ],
-        "val": [
-          "libffi-dev"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-family"
-            },
-            "relop": "eq",
-            "rhs": "ubuntu"
-          }
-        ],
-        "val": [
-          "libffi-dev"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "centos"
-          }
-        ],
-        "val": [
-          "libffi-devel"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-family"
-            },
-            "relop": "eq",
-            "rhs": "fedora"
-          }
-        ],
-        "val": [
-          "libffi-devel"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "mageia"
-          }
-        ],
-        "val": [
-          "libffi-devel"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "ol"
-          }
-        ],
-        "val": [
-          "libffi-devel"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "or": [
-              {
-                "lhs": {
-                  "id": "os-family"
-                },
-                "relop": "eq",
-                "rhs": "suse"
-              },
-              {
-                "lhs": {
-                  "id": "os-family"
-                },
-                "relop": "eq",
-                "rhs": "opensuse"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "libffi-devel"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os"
-            },
-            "relop": "eq",
-            "rhs": "freebsd"
-          }
-        ],
-        "val": [
-          "libffi"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "cygwinports"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "libffi"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "nixos"
-          }
-        ],
-        "val": [
-          "libffi"
-        ]
-      }
-    ],
-    "description": "This package can only install if libffi is installed on the system.",
-    "files-contents": {},
-    "flags": {
-      "id": "conf"
-    },
-    "homepage": "http://sourceware.org/libffi/",
-    "isLocal": false,
-    "license": "MIT",
-    "maintainer": "blue-prawn",
-    "name": "conf-libffi",
-    "opam-version": "2.0",
-    "synopsis": "Virtual package relying on libffi system installation",
-    "version": "2.0.0"
-  },
-  "conf-pkg-config": {
-    "authors": [
-      "James Henstridge",
-      "Tim Janik",
-      "Havoc Pennington",
-      "Scott Remnant"
-    ],
-    "bug-reports": "https://github.com/ocaml/opam-repository/issues",
-    "build": [
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "neq",
-                "rhs": "win32"
-              },
-              {
-                "not": {
-                  "group": [
-                    {
-                      "and": [
-                        {
-                          "lhs": {
-                            "id": "os"
-                          },
-                          "relop": "eq",
-                          "rhs": "macos"
-                        },
-                        {
-                          "lhs": {
-                            "id": "os-distribution"
-                          },
-                          "relop": "eq",
-                          "rhs": "homebrew"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkg-config",
-          "--help"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "or": [
-              {
-                "group": [
-                  {
-                    "and": [
-                      {
-                        "lhs": {
-                          "id": "os"
-                        },
-                        "relop": "eq",
-                        "rhs": "win32"
-                      },
-                      {
-                        "lhs": {
-                          "id": "os-distribution"
-                        },
-                        "relop": "neq",
-                        "rhs": "msys2"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "group": [
-                  {
-                    "and": [
-                      {
-                        "lhs": {
-                          "id": "os"
-                        },
-                        "relop": "eq",
-                        "rhs": "macos"
-                      },
-                      {
-                        "lhs": {
-                          "id": "os-distribution"
-                        },
-                        "relop": "eq",
-                        "rhs": "homebrew"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconf",
-          "--version"
-        ]
-      },
-      [
-        "sh",
-        "./write-config.sh",
-        {
-          "id": "name"
-        },
-        "-v",
-        "command:list",
-        "EOL",
-        {
-          "conditions": [
-            {
-              "and": [
-                {
-                  "lhs": {
-                    "id": "os"
-                  },
-                  "relop": "neq",
-                  "rhs": "win32"
-                },
-                {
-                  "not": {
-                    "group": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "macos"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "eq",
-                            "rhs": "homebrew"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          ],
-          "val": "pkg-config"
-        },
-        {
-          "conditions": [
-            {
-              "or": [
-                {
-                  "group": [
-                    {
-                      "and": [
-                        {
-                          "lhs": {
-                            "id": "os"
-                          },
-                          "relop": "eq",
-                          "rhs": "win32"
-                        },
-                        {
-                          "lhs": {
-                            "id": "os-distribution"
-                          },
-                          "relop": "neq",
-                          "rhs": "msys2"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "group": [
-                    {
-                      "and": [
-                        {
-                          "lhs": {
-                            "id": "os"
-                          },
-                          "relop": "eq",
-                          "rhs": "macos"
-                        },
-                        {
-                          "lhs": {
-                            "id": "os-distribution"
-                          },
-                          "relop": "eq",
-                          "rhs": "homebrew"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ],
-          "val": "pkgconf"
-        },
-        {
-          "conditions": [
-            {
-              "and": [
-                {
-                  "lhs": {
-                    "id": "os"
-                  },
-                  "relop": "eq",
-                  "rhs": "win32"
-                },
-                {
-                  "lhs": {
-                    "id": "os-distribution"
-                  },
-                  "relop": "eq",
-                  "rhs": "msys2"
-                },
-                {
-                  "id": "host-arch-x86_32:installed"
-                }
-              ]
-            }
-          ],
-          "val": "i686-w64-mingw32-pkgconf"
-        },
-        {
-          "conditions": [
-            {
-              "and": [
-                {
-                  "lhs": {
-                    "id": "os"
-                  },
-                  "relop": "eq",
-                  "rhs": "win32"
-                },
-                {
-                  "lhs": {
-                    "id": "os-distribution"
-                  },
-                  "relop": "eq",
-                  "rhs": "cygwin"
-                },
-                {
-                  "id": "host-arch-x86_32:installed"
-                }
-              ]
-            }
-          ],
-          "val": "--personality=i686-w64-mingw32"
-        },
-        {
-          "conditions": [
-            {
-              "and": [
-                {
-                  "lhs": {
-                    "id": "os"
-                  },
-                  "relop": "eq",
-                  "rhs": "win32"
-                },
-                {
-                  "lhs": {
-                    "id": "os-distribution"
-                  },
-                  "relop": "eq",
-                  "rhs": "msys2"
-                },
-                {
-                  "id": "host-arch-x86_64:installed"
-                }
-              ]
-            }
-          ],
-          "val": "x86_64-w64-mingw32-pkgconf"
-        },
-        {
-          "conditions": [
-            {
-              "and": [
-                {
-                  "lhs": {
-                    "id": "os"
-                  },
-                  "relop": "eq",
-                  "rhs": "win32"
-                },
-                {
-                  "lhs": {
-                    "id": "os-distribution"
-                  },
-                  "relop": "eq",
-                  "rhs": "cygwin"
-                },
-                {
-                  "id": "host-arch-x86_64:installed"
-                }
-              ]
-            }
-          ],
-          "val": "--personality=x86_64-w64-mingw32"
-        },
-        "EOL"
-      ],
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "cygwin"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "sh",
-          "./install-shim.sh",
-          {
-            "id": "name"
-          },
-          "pkgconf",
-          {
-            "id": "bin"
-          }
-        ]
-      }
-    ],
-    "conflicts": {
-      "conditions": [
-        {
-          "lt": "1.0.0"
-        }
-      ],
-      "val": "mingw-w64-shims"
-    },
-    "depends": [
-      {
-        "group": [
-          {
-            "or": [
-              {
-                "and": [
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "group": [
-                              {
-                                "or": [
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "cygwin"
-                                  },
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "msys2"
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "host-arch-x86_64"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "group": [
-                              {
-                                "or": [
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "cygwin"
-                                  },
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "msys2"
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-gcc-x86_64"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "eq",
-                            "rhs": "msys2"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-pkgconf-x86_64"
-                  }
-                ]
-              },
-              {
-                "and": [
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "group": [
-                              {
-                                "or": [
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "cygwin"
-                                  },
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "msys2"
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "host-arch-x86_32"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "group": [
-                              {
-                                "or": [
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "cygwin"
-                                  },
-                                  {
-                                    "lhs": {
-                                      "id": "os-distribution"
-                                    },
-                                    "relop": "eq",
-                                    "rhs": "msys2"
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-gcc-i686"
-                  },
-                  {
-                    "conditions": [
-                      {
-                        "and": [
-                          {
-                            "lhs": {
-                              "id": "os"
-                            },
-                            "relop": "eq",
-                            "rhs": "win32"
-                          },
-                          {
-                            "lhs": {
-                              "id": "os-distribution"
-                            },
-                            "relop": "eq",
-                            "rhs": "msys2"
-                          }
-                        ]
-                      }
-                    ],
-                    "val": "conf-mingw-w64-pkgconf-i686"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ],
-    "depexts": [
-      {
-        "conditions": [
-          {
-            "or": [
-              {
-                "lhs": {
-                  "id": "os-family"
-                },
-                "relop": "eq",
-                "rhs": "debian"
-              },
-              {
-                "lhs": {
-                  "id": "os-family"
-                },
-                "relop": "eq",
-                "rhs": "ubuntu"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "arch"
-          }
-        ],
-        "val": [
-          "pkgconf"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-family"
-            },
-            "relop": "eq",
-            "rhs": "fedora"
-          }
-        ],
-        "val": [
-          "pkgconf-pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "centos"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "leq",
-                "rhs": "7"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconfig"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "mageia"
-          }
-        ],
-        "val": [
-          "pkgconf-pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "rhel"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "leq",
-                "rhs": "7"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconfig"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "ol"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "leq",
-                "rhs": "7"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconfig"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "alpine"
-          }
-        ],
-        "val": [
-          "pkgconf"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "nixos"
-          }
-        ],
-        "val": [
-          "pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "macos"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "homebrew"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconf"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "macos"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "macports"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconfig"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os"
-            },
-            "relop": "eq",
-            "rhs": "freebsd"
-          }
-        ],
-        "val": [
-          "pkgconf"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "rhel"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "geq",
-                "rhs": "8"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconf-pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "centos"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "geq",
-                "rhs": "8"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconf-pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "ol"
-              },
-              {
-                "lhs": {
-                  "id": "os-version"
-                },
-                "relop": "geq",
-                "rhs": "8"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "pkgconf-pkg-config"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "eq",
-                "rhs": "win32"
-              },
-              {
-                "lhs": {
-                  "id": "os-distribution"
-                },
-                "relop": "eq",
-                "rhs": "cygwinports"
-              }
-            ]
-          }
-        ],
-        "val": [
-          "system:pkgconf"
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "os-distribution"
-            },
-            "relop": "eq",
-            "rhs": "cygwin"
-          }
-        ],
-        "val": [
-          "pkgconf"
-        ]
-      }
-    ],
-    "description": "\nThis package can only install if the pkg-config package is installed\non the system.",
-    "dev-repo": "git+https://github.com/dra27/mingw-w64-shims.git",
-    "extra-source": {
-      "section": {
-        "install-shim.sh": {
-          "checksum": [
-            "sha256=9f99322c38b0889f5b1dafbb35ab31dc012ae98c4f98b0f740a89f943142d961",
-            "sha512=0b76a529454b00027b5768fa6ead1b8dda6bc3adab55f4288a702f4cc5d7b280be938cced6841b1556e8cf98f56ecc95b7b22006859d7a91f0ef852aea74e88c"
-          ],
-          "src": "https://raw.githubusercontent.com/dra27/mingw-w64-shims/refs/tags/1.0.1/install-shim.sh"
-        },
-        "write-config.sh": {
-          "checksum": [
-            "sha256=b6cc5f98c2cfc23a7bc7774038621a2e7e7b94ed3d3080db40bc455a2575fc7a",
-            "sha512=00c4e7c605e46c8fb4d24c40da0a9317e31e3ec723a7aac59546b1cfb180024cc76dbd27c2aca8d223047ad4b0a4bcd047443fc64a6e218a21931aaa672c3e71"
-          ],
-          "src": "https://raw.githubusercontent.com/dra27/mingw-w64-shims/refs/tags/1.0.1/write-config.sh"
-        }
-      }
-    },
-    "files-contents": {},
-    "homepage": "http://www.freedesktop.org/wiki/Software/pkg-config/",
-    "isLocal": false,
-    "license": "GPL-2.0-or-later",
-    "maintainer": "David Allsopp <dra27@dra27.uk>",
-    "name": "conf-pkg-config",
-    "opam-version": "2.0",
-    "synopsis": "Check if pkg-config is installed and create an opam switch local pkgconfig folder",
     "version": "5"
   },
   "conf-which": {
@@ -42564,6 +41219,108 @@
       "(latest)"
     ]
   },
+  "cppo": {
+    "authors": [
+      "Martin Jambon"
+    ],
+    "bug-reports": "https://github.com/ocaml-community/cppo/issues",
+    "build": [
+      {
+        "conditions": [
+          {
+            "id": "dev"
+          }
+        ],
+        "val": [
+          "dune",
+          "subst"
+        ]
+      },
+      [
+        "dune",
+        "build",
+        "-p",
+        {
+          "id": "name"
+        },
+        "-j",
+        {
+          "id": "jobs"
+        },
+        "@install",
+        {
+          "conditions": [
+            {
+              "and": [
+                {
+                  "id": "with-test"
+                },
+                {
+                  "lhs": {
+                    "id": "dune:version"
+                  },
+                  "relop": "lt",
+                  "rhs": "3.24"
+                }
+              ]
+            }
+          ],
+          "val": "@runtest"
+        },
+        {
+          "conditions": [
+            {
+              "id": "with-doc"
+            }
+          ],
+          "val": "@doc"
+        }
+      ]
+    ],
+    "depends": [
+      {
+        "conditions": [
+          {
+            "geq": "4.02.3"
+          }
+        ],
+        "val": "ocaml"
+      },
+      {
+        "conditions": [
+          {
+            "geq": "2.0"
+          }
+        ],
+        "val": "dune"
+      },
+      "base-unix"
+    ],
+    "description": "\nCppo is an equivalent of the C preprocessor for OCaml programs.\nIt allows the definition of simple macros and file inclusion.\n\nCppo is:\n\n* more OCaml-friendly than cpp\n* easy to learn without consulting a manual\n* reasonably fast\n* simple to install and to maintain\n",
+    "dev-repo": "git+https://github.com/ocaml-community/cppo.git",
+    "doc": "https://ocaml-community.github.io/cppo",
+    "files-contents": {},
+    "homepage": "https://github.com/ocaml-community/cppo",
+    "isLocal": false,
+    "license": "BSD-3-Clause",
+    "maintainer": [
+      "Martin Jambon <martin@mjambon.com>",
+      "Yishuai Li <yishuai@upenn.edu>"
+    ],
+    "name": "cppo",
+    "opam-version": "2.0",
+    "synopsis": "Code preprocessor like cpp for OCaml",
+    "url": {
+      "section": {
+        "checksum": [
+          "md5=a197cb393b84f6b30e0ff55080ac429b",
+          "sha512=3840725b767a0300bdc48f11d26d798bdcae0a764ed6798df3a08dfc8cc76fe124b14a19d47c9b5ea8e229d68b0311510afce77c0e4d9131fbda5116dc2689a2"
+        ],
+        "src": "https://github.com/ocaml-community/cppo/archive/v1.8.0.tar.gz"
+      }
+    },
+    "version": "1.8.0"
+  },
   "csexp": {
     "authors": [
       "Quentin Hocquet <mefyl@gruntech.org>",
@@ -42966,217 +41723,6 @@
       "(any).(any).(latest)"
     ]
   },
-  "ctypes-foreign": {
-    "authors": [
-      "Jeremy Yallop"
-    ],
-    "bug-reports": "https://github.com/yallop/ocaml-ctypes/issues",
-    "build": [
-      {
-        "conditions": [
-          {
-            "id": "dev"
-          }
-        ],
-        "val": [
-          "dune",
-          "subst"
-        ]
-      },
-      [
-        "dune",
-        "build",
-        "-p",
-        {
-          "id": "name"
-        },
-        "-j",
-        {
-          "id": "jobs"
-        },
-        "--promote-install-files=false",
-        "@install",
-        {
-          "conditions": [
-            {
-              "id": "with-test"
-            }
-          ],
-          "val": "@runtest"
-        },
-        {
-          "conditions": [
-            {
-              "id": "with-doc"
-            }
-          ],
-          "val": "@doc"
-        }
-      ],
-      [
-        "dune",
-        "install",
-        "-p",
-        {
-          "id": "name"
-        },
-        "--create-install-files",
-        {
-          "id": "name"
-        }
-      ]
-    ],
-    "depends": [
-      {
-        "conditions": [
-          {
-            "geq": "3.9"
-          }
-        ],
-        "val": "dune"
-      },
-      {
-        "conditions": [
-          {
-            "geq": "4.07.0"
-          }
-        ],
-        "val": "ocaml"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "with-test"
-              },
-              {
-                "geq": "0.2.2"
-              }
-            ]
-          }
-        ],
-        "val": "integers"
-      },
-      {
-        "conditions": [
-          {
-            "eq": {
-              "id": "version"
-            }
-          }
-        ],
-        "val": "ctypes"
-      },
-      "dune-configurator",
-      "conf-pkg-config",
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "with-test"
-              },
-              {
-                "geq": "2.4.7"
-              }
-            ]
-          }
-        ],
-        "val": "lwt"
-      },
-      {
-        "conditions": [
-          {
-            "id": "with-test"
-          }
-        ],
-        "val": "ounit2"
-      },
-      {
-        "conditions": [
-          {
-            "id": "with-test"
-          }
-        ],
-        "val": "conf-ncurses"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "with-test"
-              },
-              {
-                "lhs": {
-                  "id": "os"
-                },
-                "relop": "neq",
-                "rhs": "win32"
-              }
-            ]
-          }
-        ],
-        "val": "conf-fts"
-      },
-      {
-        "conditions": [
-          {
-            "geq": "2.0.0"
-          }
-        ],
-        "val": "conf-libffi"
-      },
-      {
-        "conditions": [
-          {
-            "id": "with-doc"
-          }
-        ],
-        "val": "odoc"
-      }
-    ],
-    "description": "\n\nThis installs the `ctypes-foreign` interface which\nuses `libffi` to provide dynamic access to foreign libraries.",
-    "dev-repo": "git+https://github.com/yallop/ocaml-ctypes.git",
-    "doc": "https://yallop.github.io/ocaml-ctypes/",
-    "extra-files": [
-      [
-        "bigarray.patch",
-        "sha256=c5d59b4624382cd61ff8da5c9ec3153ada0880efc43fbb2a20491984bd509a3e"
-      ]
-    ],
-    "files-contents": {
-      "bigarray.patch": {
-        "ref": "c5d59b4624-bigarray.patch"
-      }
-    },
-    "homepage": "https://github.com/yallop/ocaml-ctypes",
-    "isLocal": false,
-    "license": "MIT",
-    "maintainer": [
-      "Jeremy Yallop <yallop@gmail.com>"
-    ],
-    "name": "ctypes-foreign",
-    "opam-version": "2.0",
-    "patches": [
-      "bigarray.patch"
-    ],
-    "synopsis": "Dynamic access to foreign C libraries using Ctypes",
-    "tags": [
-      "org:mirage"
-    ],
-    "url": {
-      "section": {
-        "checksum": [
-          "sha256=249c5604c8554659761a7282db4ad200aa8c0fdc408cdb53102bd70feeb51955",
-          "md5=064316aaf508a9db203f114bb8401dee"
-        ],
-        "src": "https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.24.0.tar.gz"
-      }
-    },
-    "version": "0.24.0+ox"
-  },
   "dedent": {
     "authors": [
       "Jane Street Group, LLC"
@@ -43285,7 +41831,9 @@
     ]
   },
   "dune": {
-    "authors": "Jane Street Group, LLC <opensource@janestreet.com>",
+    "authors": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
     "bug-reports": "https://github.com/ocaml/dune/issues",
     "build": [
       [
@@ -43369,12 +41917,52 @@
     ],
     "depends": [
       {
-        "conditions": [
+        "group": [
           {
-            "geq": "4.08"
+            "or": [
+              {
+                "conditions": [
+                  {
+                    "geq": "4.14"
+                  }
+                ],
+                "val": "ocaml"
+              },
+              {
+                "group": [
+                  {
+                    "and": [
+                      {
+                        "conditions": [
+                          {
+                            "and": [
+                              {
+                                "geq": "4.02"
+                              },
+                              {
+                                "lt": "4.14~~"
+                              }
+                            ]
+                          }
+                        ],
+                        "val": "ocaml"
+                      },
+                      "ocamlfind-secondary",
+                      {
+                        "conditions": [
+                          {
+                            "geq": "4.14"
+                          }
+                        ],
+                        "val": "ocaml-secondary-compiler"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
           }
-        ],
-        "val": "ocaml"
+        ]
       },
       "base-unix",
       "base-threads",
@@ -43431,6 +42019,9 @@
                 "geq": "6.1.0"
               },
               {
+                "lt": "6.4"
+              },
+              {
                 "lhs": {
                   "id": "os"
                 },
@@ -43451,6 +42042,9 @@
               },
               {
                 "geq": "6.1.0"
+              },
+              {
+                "lt": "6.4"
               },
               {
                 "lhs": {
@@ -43532,7 +42126,7 @@
                 "id": "with-dev-setup"
               },
               {
-                "geq": "2.4.0"
+                "geq": "3.2.0"
               },
               {
                 "lhs": {
@@ -43567,6 +42161,14 @@
           }
         ],
         "val": "ppx_expect"
+      },
+      {
+        "conditions": [
+          {
+            "id": "with-dev-setup"
+          }
+        ],
+        "val": "ppx_optcomp"
       },
       {
         "conditions": [
@@ -43669,6 +42271,9 @@
                 "geq": "5.1.0-51"
               },
               {
+                "lt": "7.0"
+              },
+              {
                 "lhs": {
                   "id": "os"
                 },
@@ -43687,49 +42292,48 @@
           }
         ],
         "val": "uutf"
+      },
+      {
+        "conditions": [
+          {
+            "id": "with-test"
+          }
+        ],
+        "val": "conf-git-daemon"
       }
     ],
-    "description": "Dune is a build system that was designed to simplify the release of\nJane Street packages. It reads metadata from \"dune\" files following a\nvery simple s-expression syntax.\n\nDune is fast, has very low-overhead, and supports parallel builds on\nall platforms. It has no system dependencies; all you need to build\ndune or packages using dune is OCaml. You don't need make or bash\nas long as the packages themselves don't use bash explicitly.\n\nDune is composable; supporting multi-package development by simply\ndropping multiple repositories into the same directory.\n\nDune also supports multi-context builds, such as building against\nseveral opam roots/switches simultaneously. This helps maintaining\npackages across several versions of OCaml and gives cross-compilation\nfor free.",
+    "description": "\n\nDune is a build system that was designed to simplify the release of\nJane Street packages. It reads metadata from \"dune\" files following a\nvery simple s-expression syntax.\n\nDune is fast, has very low-overhead, and supports parallel builds on\nall platforms. It has no system dependencies; all you need to build\ndune or packages using dune is OCaml. You don't need make or bash\nas long as the packages themselves don't use bash explicitly.\n\nDune is composable; supporting multi-package development by simply\ndropping multiple repositories into the same directory.\n\nDune also supports multi-context builds, such as building against\nseveral opam roots/switches simultaneously. This helps maintaining\npackages across several versions of OCaml and gives cross-compilation\nfor free.\n",
     "dev-repo": "git+https://github.com/ocaml/dune.git",
     "doc": "https://dune.readthedocs.io/",
-    "extra-files": [
-      [
-        "oxcaml-dune.patch",
-        "sha256=69613942664345cf55f666f71cd5cbd0c6e5acfb38e0400553bd887364b997e2"
-      ]
-    ],
-    "files-contents": {
-      "oxcaml-dune.patch": {
-        "ref": "6961394266-oxcaml-dune.patch"
-      }
-    },
+    "files-contents": {},
     "homepage": "https://github.com/ocaml/dune",
     "isLocal": false,
     "license": "MIT",
-    "maintainer": "Jane Street Group, LLC <opensource@janestreet.com>",
+    "maintainer": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
     "name": "dune",
     "opam-version": "2.0",
-    "patches": [
-      "oxcaml-dune.patch"
-    ],
     "synopsis": "Fast, portable, and opinionated build system",
     "url": {
       "section": {
         "checksum": [
-          "sha256=c2ccf8bc6b17afa47c450297357496303aa7c8680e329b79d98c68e35013a118",
-          "sha512=26d3df56a509c6e8937a9333944303bdd8800a41e1b869c3adfb76d1e1fe615b6ec41491d596bd5982e338dcf70b97c18f963f37bfbf2bd581cbd356f3d5f4e5"
+          "sha256=472798691b0216daf538709f0f4703b3617ef24ad0866c9096068baaba4d762a",
+          "sha512=13082a66a28e940d4b3c9f78b556f6c1455987cd522355ba4502e01e60a3d002d3101b51284726ae21aa87494efa2dc54d016173f05b616bbc5dad714d5714a3"
         ],
-        "src": "https://github.com/ocaml/dune/releases/download/3.22.2/dune-3.22.2.tbz"
+        "src": "https://github.com/ocaml/dune/releases/download/3.24.2/dune-3.24.2.tbz"
       }
     },
-    "version": "3.22.2+ox",
-    "x-commit-hash": "df26745e52be99ecdb2ff994feab1eacd858b226",
+    "version": "3.24.2",
+    "x-commit-hash": "ce734ac25ffb06994a4530426bb06ee8cda19e50",
     "x-maintenance-intent": [
       "(latest)"
     ]
   },
-  "dune-configurator": {
-    "authors": "Jane Street Group, LLC <opensource@janestreet.com>",
+  "dune-build-info": {
+    "authors": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
     "bug-reports": "https://github.com/ocaml/dune/issues",
     "build": [
       {
@@ -43743,16 +42347,6 @@
           "subst"
         ]
       },
-      [
-        "rm",
-        "-rf",
-        "vendor/csexp"
-      ],
-      [
-        "rm",
-        "-rf",
-        "vendor/pp"
-      ],
       [
         "dune",
         "build",
@@ -43779,7 +42373,7 @@
       {
         "conditions": [
           {
-            "geq": "3.22"
+            "geq": "3.24"
           }
         ],
         "val": "dune"
@@ -43787,7 +42381,100 @@
       {
         "conditions": [
           {
-            "geq": "4.08.0"
+            "geq": "4.14"
+          }
+        ],
+        "val": "ocaml"
+      },
+      {
+        "conditions": [
+          {
+            "id": "with-doc"
+          }
+        ],
+        "val": "odoc"
+      }
+    ],
+    "description": "\nThe build-info library allows to access information about how the\nexecutable was built, such as the version of the project at which it\nwas built or the list of statically linked libraries with their\nversions.  It supports reporting the version from the version control\nsystem during development to get an precise reference of when the\nexecutable was built.\n",
+    "dev-repo": "git+https://github.com/ocaml/dune.git",
+    "doc": "https://dune.readthedocs.io/",
+    "files-contents": {},
+    "homepage": "https://github.com/ocaml/dune",
+    "isLocal": false,
+    "license": "MIT",
+    "maintainer": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
+    "name": "dune-build-info",
+    "opam-version": "2.0",
+    "synopsis": "Embed build information inside executable",
+    "url": {
+      "section": {
+        "checksum": [
+          "sha256=472798691b0216daf538709f0f4703b3617ef24ad0866c9096068baaba4d762a",
+          "sha512=13082a66a28e940d4b3c9f78b556f6c1455987cd522355ba4502e01e60a3d002d3101b51284726ae21aa87494efa2dc54d016173f05b616bbc5dad714d5714a3"
+        ],
+        "src": "https://github.com/ocaml/dune/releases/download/3.24.2/dune-3.24.2.tbz"
+      }
+    },
+    "version": "3.24.2",
+    "x-commit-hash": "ce734ac25ffb06994a4530426bb06ee8cda19e50",
+    "x-maintenance-intent": [
+      "(latest)"
+    ]
+  },
+  "dune-configurator": {
+    "authors": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
+    "bug-reports": "https://github.com/ocaml/dune/issues",
+    "build": [
+      {
+        "conditions": [
+          {
+            "id": "dev"
+          }
+        ],
+        "val": [
+          "dune",
+          "subst"
+        ]
+      },
+      [
+        "dune",
+        "build",
+        "-p",
+        {
+          "id": "name"
+        },
+        "-j",
+        {
+          "id": "jobs"
+        },
+        "@install",
+        {
+          "conditions": [
+            {
+              "id": "with-doc"
+            }
+          ],
+          "val": "@doc"
+        }
+      ]
+    ],
+    "depends": [
+      {
+        "conditions": [
+          {
+            "geq": "3.24"
+          }
+        ],
+        "val": "dune"
+      },
+      {
+        "conditions": [
+          {
+            "geq": "4.14"
           }
         ],
         "val": "ocaml"
@@ -43813,38 +42500,27 @@
     "description": "\ndune-configurator is a small library that helps writing OCaml scripts that\ntest features available on the system, in order to generate config.h\nfiles for instance.\nAmong other things, dune-configurator allows one to:\n- test if a C program compiles\n- query pkg-config\n- import #define from OCaml header files\n- generate config.h file\n",
     "dev-repo": "git+https://github.com/ocaml/dune.git",
     "doc": "https://dune.readthedocs.io/",
-    "extra-files": [
-      [
-        "oxcaml-dune.patch",
-        "sha256=69613942664345cf55f666f71cd5cbd0c6e5acfb38e0400553bd887364b997e2"
-      ]
-    ],
-    "files-contents": {
-      "oxcaml-dune.patch": {
-        "ref": "6961394266-oxcaml-dune.patch"
-      }
-    },
+    "files-contents": {},
     "homepage": "https://github.com/ocaml/dune",
     "isLocal": false,
     "license": "MIT",
-    "maintainer": "Jane Street Group, LLC <opensource@janestreet.com>",
+    "maintainer": [
+      "Jane Street Group, LLC <opensource@janestreet.com>"
+    ],
     "name": "dune-configurator",
     "opam-version": "2.0",
-    "patches": [
-      "oxcaml-dune.patch"
-    ],
     "synopsis": "Helper library for gathering system configuration",
     "url": {
       "section": {
         "checksum": [
-          "sha256=c2ccf8bc6b17afa47c450297357496303aa7c8680e329b79d98c68e35013a118",
-          "sha512=26d3df56a509c6e8937a9333944303bdd8800a41e1b869c3adfb76d1e1fe615b6ec41491d596bd5982e338dcf70b97c18f963f37bfbf2bd581cbd356f3d5f4e5"
+          "sha256=472798691b0216daf538709f0f4703b3617ef24ad0866c9096068baaba4d762a",
+          "sha512=13082a66a28e940d4b3c9f78b556f6c1455987cd522355ba4502e01e60a3d002d3101b51284726ae21aa87494efa2dc54d016173f05b616bbc5dad714d5714a3"
         ],
-        "src": "https://github.com/ocaml/dune/releases/download/3.22.2/dune-3.22.2.tbz"
+        "src": "https://github.com/ocaml/dune/releases/download/3.24.2/dune-3.24.2.tbz"
       }
     },
-    "version": "3.22.2+ox",
-    "x-commit-hash": "df26745e52be99ecdb2ff994feab1eacd858b226",
+    "version": "3.24.2",
+    "x-commit-hash": "ce734ac25ffb06994a4530426bb06ee8cda19e50",
     "x-maintenance-intent": [
       "(latest)"
     ]
@@ -50172,6 +48848,159 @@
     },
     "version": "1.1.2+ox"
   },
+  "omd": {
+    "authors": [
+      "Philippe Wang <philippe.wang@gmail.com>",
+      "Nicolás Ojeda Bär <n.oje.bar@gmail.com>"
+    ],
+    "bug-reports": "https://github.com/ocaml/omd/issues",
+    "build": [
+      {
+        "conditions": [
+          {
+            "id": "dev"
+          }
+        ],
+        "val": [
+          "dune",
+          "subst"
+        ]
+      },
+      [
+        "dune",
+        "build",
+        "-p",
+        {
+          "id": "name"
+        },
+        "-j",
+        {
+          "id": "jobs"
+        },
+        "@install",
+        {
+          "conditions": [
+            {
+              "id": "with-test"
+            }
+          ],
+          "val": "@runtest"
+        },
+        {
+          "conditions": [
+            {
+              "id": "with-doc"
+            }
+          ],
+          "val": "@doc"
+        }
+      ]
+    ],
+    "conflicts": [
+      {
+        "conditions": [
+          {
+            "lt": "5.2.0minus31"
+          }
+        ],
+        "val": "oxcaml-compiler"
+      }
+    ],
+    "depends": [
+      {
+        "conditions": [
+          {
+            "geq": "2.7"
+          }
+        ],
+        "val": "dune"
+      },
+      {
+        "conditions": [
+          {
+            "geq": "4.13"
+          }
+        ],
+        "val": "ocaml"
+      },
+      "uutf",
+      "uucp",
+      "uunf",
+      {
+        "conditions": [
+          {
+            "geq": "2.7"
+          }
+        ],
+        "val": "dune-build-info"
+      },
+      {
+        "conditions": [
+          {
+            "id": "with-test"
+          }
+        ],
+        "val": "ppx_expect"
+      },
+      {
+        "conditions": [
+          {
+            "id": "with-doc"
+          }
+        ],
+        "val": "odoc"
+      }
+    ],
+    "description": "This Markdown library is implemented using only pure OCaml (including\nI/O operations provided by the standard OCaml compiler distribution).\nOMD is meant to be as faithful as possible to the original Markdown.\nAdditionally, OMD implements a few Github markdown features, an\nextension mechanism, and some other features. Note that the opam\npackage installs both the OMD library and the command line tool `omd`.",
+    "dev-repo": "git+https://github.com/ocaml/omd.git",
+    "extra-files": [
+      [
+        "omd-fix-infinite-recursion-bug.patch",
+        "sha256=18edcc7126b84b101ed22768c6f62f7887956ff7f4fc0756d9b116d00505f8cb"
+      ],
+      [
+        "omd-fix-link-parsed-as-text-bug.patch",
+        "sha256=50a4e520a67741be1b97d4bfe657985e2f17fb09ae85f7abefec001770a1c912"
+      ]
+    ],
+    "files-contents": {
+      "omd-fix-infinite-recursion-bug.patch": {
+        "ref": "18edcc7126-omd-fix-infinite-recursion-bug.patch"
+      },
+      "omd-fix-link-parsed-as-text-bug.patch": {
+        "ref": "50a4e520a6-omd-fix-link-parsed-as-text-bug.patch"
+      }
+    },
+    "homepage": "https://github.com/ocaml/omd",
+    "isLocal": false,
+    "license": "ISC",
+    "maintainer": [
+      "Shon Feder <shon.feder@gmail.com>",
+      "Raphael Sousa Santos <@sonologico>"
+    ],
+    "name": "omd",
+    "opam-version": "2.0",
+    "patches": [
+      "omd-fix-infinite-recursion-bug.patch",
+      "omd-fix-link-parsed-as-text-bug.patch"
+    ],
+    "synopsis": "A Markdown frontend in pure OCaml",
+    "tags": [
+      "org:ocamllabs",
+      "org:mirage"
+    ],
+    "url": {
+      "section": {
+        "checksum": [
+          "sha256=93969697875b005b8225e6d3475d1296ec45e98680bbd21945c9a4bf6a62df1c",
+          "sha512=cf86b7bf94581489f7dae5922a4c669691128b500f52a5b9acc3af2c062db8c5e992c9116cf2ac067f2b9777cdd1e027d8ca1152cb8c1606208c6401ea1d8662"
+        ],
+        "src": "https://github.com/ocaml/opam-source-archives/raw/main/omd-2.0.0.alpha4.tbz"
+      }
+    },
+    "version": "2.0.0~alpha4+ox",
+    "x-commit-hash": "373e3f80e48001a62daf4072373ad3aa589ca65f"
+  },
   "ordinal_abbreviation": {
     "authors": [
       "Jane Street Group, LLC"
@@ -50488,7 +49317,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "chrome-trace"
@@ -50957,10 +49793,13 @@
     },
     "version": "5.2.0minus39"
   },
-  "oxcaml-ctypes-foreign-patches": {
+  "oxcaml-ctypes-foreign": {
     "authors": "David Allsopp",
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
-    "conflicts": "oxcaml-ctypes-foreign",
+    "conflicts": [
+      "oxcaml-ctypes-foreign-patches",
+      "ctypes-foreign"
+    ],
     "depends": [
       {
         "group": [
@@ -50993,35 +49832,9 @@
           }
         ],
         "val": "oxcaml"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "build"
-              },
-              {
-                "group": [
-                  {
-                    "or": [
-                      {
-                        "eq": "0.23.0+ox"
-                      },
-                      {
-                        "eq": "0.24.0+ox"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "val": "ctypes-foreign"
       }
     ],
-    "description": "OxCaml meta-package indicating this library is installed",
+    "description": "OxCaml meta-package indicating this package is not installed",
     "files-contents": {},
     "homepage": "https://oxcaml.org",
     "isLocal": false,
@@ -51041,10 +49854,10 @@
         "val": "WARNING! An older version of OxCaml is being installed"
       }
     ],
-    "name": "oxcaml-ctypes-foreign-patches",
+    "name": "oxcaml-ctypes-foreign",
     "opam-version": "2.0",
-    "synopsis": "OxCaml patched ctypes-foreign",
-    "version": "enabled"
+    "synopsis": "OxCaml patched ctypes-foreign (not installed)",
+    "version": "guard"
   },
   "oxcaml-ctypes-patches": {
     "authors": "David Allsopp",
@@ -51201,6 +50014,79 @@
     "synopsis": "OxCaml patched dot-merlin-reader (not installed)",
     "version": "guard"
   },
+  "oxcaml-dune": {
+    "authors": "David Allsopp",
+    "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
+    "conflicts": [
+      "oxcaml-dune-patches",
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "dune"
+      }
+    ],
+    "depends": [
+      {
+        "group": [
+          {
+            "or": [
+              {
+                "conditions": [
+                  {
+                    "id": "post"
+                  }
+                ],
+                "val": "oxcaml-dune-action-plugin"
+              },
+              {
+                "conditions": [
+                  {
+                    "id": "post"
+                  }
+                ],
+                "val": "oxcaml-dune-action-plugin-patches"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "id": "post"
+          }
+        ],
+        "val": "oxcaml"
+      }
+    ],
+    "description": "OxCaml meta-package indicating this package is not installed",
+    "files-contents": {},
+    "homepage": "https://oxcaml.org",
+    "isLocal": false,
+    "license": "CC0-1.0+",
+    "maintainer": "David Allsopp <dallsopp@janestreet.com>",
+    "messages": [
+      {
+        "conditions": [
+          {
+            "lhs": {
+              "id": "oxcaml:version"
+            },
+            "relop": "eq",
+            "rhs": "archived"
+          }
+        ],
+        "val": "WARNING! An older version of OxCaml is being installed"
+      }
+    ],
+    "name": "oxcaml-dune",
+    "opam-version": "2.0",
+    "synopsis": "OxCaml patched dune (not installed)",
+    "version": "guard"
+  },
   "oxcaml-dune-action-plugin": {
     "authors": "David Allsopp",
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
@@ -51209,7 +50095,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-action-plugin"
@@ -51282,7 +50175,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-build-info"
@@ -51347,10 +50247,20 @@
     "synopsis": "OxCaml patched dune-build-info (not installed)",
     "version": "guard"
   },
-  "oxcaml-dune-configurator-patches": {
+  "oxcaml-dune-configurator": {
     "authors": "David Allsopp",
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
-    "conflicts": "oxcaml-dune-configurator",
+    "conflicts": [
+      "oxcaml-dune-configurator-patches",
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "dune-configurator"
+      }
+    ],
     "depends": [
       {
         "group": [
@@ -51383,38 +50293,9 @@
           }
         ],
         "val": "oxcaml"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "build"
-              },
-              {
-                "group": [
-                  {
-                    "or": [
-                      {
-                        "eq": "3.20.2+ox"
-                      },
-                      {
-                        "eq": "3.21.0+ox"
-                      },
-                      {
-                        "eq": "3.22.2+ox"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "val": "dune-configurator"
       }
     ],
-    "description": "OxCaml meta-package indicating this library is installed",
+    "description": "OxCaml meta-package indicating this package is not installed",
     "files-contents": {},
     "homepage": "https://oxcaml.org",
     "isLocal": false,
@@ -51434,10 +50315,10 @@
         "val": "WARNING! An older version of OxCaml is being installed"
       }
     ],
-    "name": "oxcaml-dune-configurator-patches",
+    "name": "oxcaml-dune-configurator",
     "opam-version": "2.0",
-    "synopsis": "OxCaml patched dune-configurator",
-    "version": "enabled"
+    "synopsis": "OxCaml patched dune-configurator (not installed)",
+    "version": "guard"
   },
   "oxcaml-dune-glob": {
     "authors": "David Allsopp",
@@ -51447,7 +50328,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-glob"
@@ -51512,101 +50400,6 @@
     "synopsis": "OxCaml patched dune-glob (not installed)",
     "version": "guard"
   },
-  "oxcaml-dune-patches": {
-    "authors": "David Allsopp",
-    "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
-    "conflicts": "oxcaml-dune",
-    "depends": [
-      {
-        "group": [
-          {
-            "or": [
-              {
-                "conditions": [
-                  {
-                    "id": "post"
-                  }
-                ],
-                "val": "oxcaml-dune-action-plugin"
-              },
-              {
-                "conditions": [
-                  {
-                    "id": "post"
-                  }
-                ],
-                "val": "oxcaml-dune-action-plugin-patches"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "conditions": [
-          {
-            "id": "post"
-          }
-        ],
-        "val": "oxcaml"
-      },
-      {
-        "conditions": [
-          {
-            "and": [
-              {
-                "id": "build"
-              },
-              {
-                "group": [
-                  {
-                    "or": [
-                      {
-                        "eq": "3.20.2+ox"
-                      },
-                      {
-                        "eq": "3.20.2+ox1"
-                      },
-                      {
-                        "eq": "3.21.0+ox"
-                      },
-                      {
-                        "eq": "3.22.2+ox"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "val": "dune"
-      }
-    ],
-    "description": "OxCaml meta-package indicating this library is installed",
-    "files-contents": {},
-    "homepage": "https://oxcaml.org",
-    "isLocal": false,
-    "license": "CC0-1.0+",
-    "maintainer": "David Allsopp <dallsopp@janestreet.com>",
-    "messages": [
-      {
-        "conditions": [
-          {
-            "lhs": {
-              "id": "oxcaml:version"
-            },
-            "relop": "eq",
-            "rhs": "archived"
-          }
-        ],
-        "val": "WARNING! An older version of OxCaml is being installed"
-      }
-    ],
-    "name": "oxcaml-dune-patches",
-    "opam-version": "2.0",
-    "synopsis": "OxCaml patched dune",
-    "version": "enabled"
-  },
   "oxcaml-dune-private-libs": {
     "authors": "David Allsopp",
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
@@ -51615,7 +50408,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-private-libs"
@@ -51685,7 +50485,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-dune-rpc-patches",
-      "dune-rpc"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "dune-rpc"
+      }
     ],
     "depends": [
       {
@@ -51754,7 +50561,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-rpc-lwt"
@@ -51827,7 +50641,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "dune-site"
@@ -51897,7 +50718,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-dyn-patches",
-      "dyn"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "dyn"
+      }
     ],
     "depends": [
       {
@@ -51963,7 +50791,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-eio-patches",
-      "eio"
+      {
+        "conditions": [
+          {
+            "lt": "1.4"
+          }
+        ],
+        "val": "eio"
+      }
     ],
     "depends": [
       {
@@ -52029,7 +50864,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-eio_linux-patches",
-      "eio_linux"
+      {
+        "conditions": [
+          {
+            "lt": "1.4"
+          }
+        ],
+        "val": "eio_linux"
+      }
     ],
     "depends": [
       {
@@ -52095,7 +50937,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-eio_main-patches",
-      "eio_main"
+      {
+        "conditions": [
+          {
+            "lt": "1.4"
+          }
+        ],
+        "val": "eio_main"
+      }
     ],
     "depends": [
       {
@@ -52161,7 +51010,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-eio_posix-patches",
-      "eio_posix"
+      {
+        "conditions": [
+          {
+            "lt": "1.4"
+          }
+        ],
+        "val": "eio_posix"
+      }
     ],
     "depends": [
       {
@@ -52301,7 +51157,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-fs-io-patches",
-      "fs-io"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "fs-io"
+      }
     ],
     "depends": [
       {
@@ -53196,7 +52059,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-mdx-patches",
-      "mdx"
+      {
+        "conditions": [
+          {
+            "lt": "2.6.0"
+          }
+        ],
+        "val": "mdx"
+      }
     ],
     "depends": [
       {
@@ -53770,7 +52640,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-ocamlc-loc-patches",
-      "ocamlc-loc"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "ocamlc-loc"
+      }
     ],
     "depends": [
       {
@@ -54193,12 +53070,11 @@
     "synopsis": "OxCaml patched ojs",
     "version": "enabled"
   },
-  "oxcaml-omd": {
+  "oxcaml-omd-patches": {
     "authors": "David Allsopp",
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
-      "oxcaml-omd-patches",
-      "omd",
+      "oxcaml-omd",
       {
         "conditions": [
           {
@@ -54240,9 +53116,28 @@
           }
         ],
         "val": "oxcaml"
+      },
+      {
+        "conditions": [
+          {
+            "and": [
+              {
+                "id": "build"
+              },
+              {
+                "group": [
+                  {
+                    "eq": "2.0.0~alpha4+ox"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "val": "omd"
       }
     ],
-    "description": "OxCaml meta-package indicating this package is not installed",
+    "description": "OxCaml meta-package indicating this library is installed",
     "files-contents": {},
     "homepage": "https://oxcaml.org",
     "isLocal": false,
@@ -54262,10 +53157,10 @@
         "val": "WARNING! An older version of OxCaml is being installed"
       }
     ],
-    "name": "oxcaml-omd",
+    "name": "oxcaml-omd-patches",
     "opam-version": "2.0",
-    "synopsis": "OxCaml patched omd (not installed)",
-    "version": "guard"
+    "synopsis": "OxCaml patched omd",
+    "version": "enabled"
   },
   "oxcaml-opam-core": {
     "authors": "David Allsopp",
@@ -54404,7 +53299,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-ordering-patches",
-      "ordering"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "ordering"
+      }
     ],
     "depends": [
       {
@@ -55250,7 +54152,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-stdune-patches",
-      "stdune"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "stdune"
+      }
     ],
     "depends": [
       {
@@ -55316,7 +54225,14 @@
     "bug-reports": "https://github.com/oxcaml/opam-repository/issues",
     "conflicts": [
       "oxcaml-top-closure-patches",
-      "top-closure"
+      {
+        "conditions": [
+          {
+            "lt": "3.24.2"
+          }
+        ],
+        "val": "top-closure"
+      }
     ],
     "depends": [
       {
@@ -55695,7 +54611,14 @@
       {
         "conditions": [
           {
-            "geq": "3.21.0"
+            "and": [
+              {
+                "geq": "3.21.0"
+              },
+              {
+                "lt": "3.24.2"
+              }
+            ]
           }
         ],
         "val": "xdg"
@@ -70571,6 +69494,163 @@
       "section": {
         "checksum": "sha512=c2b5c883c2ed1ee8e7bc9102339dfbca5940e68cd2af59a10abc827fb64c91ad03f85cfc12d4c79605c10e9b3a90743267af8b069143fefeeff6658ec8ed843f",
         "src": "https://erratique.ch/software/uucp/releases/uucp-17.0.0.tbz"
+      }
+    },
+    "version": "17.0.0",
+    "x-maintenance-intent": [
+      "(latest)"
+    ]
+  },
+  "uunf": {
+    "authors": "The uunf programmers",
+    "bug-reports": "https://github.com/dbuenzli/uunf/issues",
+    "build": [
+      "ocaml",
+      "pkg/pkg.ml",
+      "build",
+      "--dev-pkg",
+      "%{dev}%",
+      "--with-uutf",
+      "%{uutf:installed}%",
+      "--with-cmdliner",
+      "%{cmdliner:installed}%"
+    ],
+    "conflicts": [
+      {
+        "conditions": [
+          {
+            "lt": "1.0.0"
+          }
+        ],
+        "val": "uutf"
+      },
+      {
+        "conditions": [
+          {
+            "lt": "1.1.0"
+          }
+        ],
+        "val": "cmdliner"
+      }
+    ],
+    "depends": [
+      {
+        "conditions": [
+          {
+            "geq": "4.14.0"
+          }
+        ],
+        "val": "ocaml"
+      },
+      {
+        "conditions": [
+          {
+            "id": "build"
+          }
+        ],
+        "val": "ocamlfind"
+      },
+      {
+        "conditions": [
+          {
+            "id": "build"
+          }
+        ],
+        "val": "ocamlbuild"
+      },
+      {
+        "conditions": [
+          {
+            "and": [
+              {
+                "id": "build"
+              },
+              {
+                "geq": "1.1.0"
+              }
+            ]
+          }
+        ],
+        "val": "topkg"
+      },
+      {
+        "conditions": [
+          {
+            "and": [
+              {
+                "id": "dev"
+              },
+              {
+                "geq": "17.0.0"
+              },
+              {
+                "lt": "18.0.0"
+              }
+            ]
+          }
+        ],
+        "val": "uucd"
+      }
+    ],
+    "depopts": [
+      "uutf",
+      "cmdliner"
+    ],
+    "description": "Uunf is an OCaml library for normalizing Unicode text. It supports all\nUnicode [normalization forms]. The library is independent from any IO\nmechanism or Unicode text data structure and it can process text\nwithout a complete in-memory representation.\n\nUunf is distributed under the ISC license. It has no dependency.\n\n[normalization forms]: http://www.unicode.org/reports/tr15/\n\nHomepage: <http://erratique.ch/software/uunf>",
+    "dev-repo": "git+https://erratique.ch/repos/uunf.git",
+    "doc": "https://erratique.ch/software/uunf/doc/Uunf",
+    "files-contents": {},
+    "homepage": "https://erratique.ch/software/uunf",
+    "isLocal": false,
+    "license": "ISC",
+    "maintainer": "Daniel Bünzli <daniel.buenzl i@erratique.ch>",
+    "name": "uunf",
+    "opam-version": "2.0",
+    "post-messages": {
+      "conditions": [
+        {
+          "and": [
+            {
+              "id": "failure"
+            },
+            {
+              "group": [
+                {
+                  "or": [
+                    {
+                      "lhs": {
+                        "id": "arch"
+                      },
+                      "relop": "eq",
+                      "rhs": "ppc64"
+                    },
+                    {
+                      "lhs": {
+                        "id": "arch"
+                      },
+                      "relop": "eq",
+                      "rhs": "arm64"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "val": "If the build fails with \"ocamlopt.opt got signal and exited\", issue 'ulimit -s unlimited' and retry."
+    },
+    "synopsis": "Unicode text normalization for OCaml",
+    "tags": [
+      "unicode",
+      "text",
+      "normalization",
+      "org:erratique"
+    ],
+    "url": {
+      "section": {
+        "checksum": "sha512=1ec4d7229bb473ab2dd146ec732c8c70f357f73211e71d32625cd2410a35766e684bbeb1bd4e186b7403d4af8d597d46b7ccf58b23ae95aac32a96c0b4321691",
+        "src": "https://erratique.ch/software/uunf/releases/uunf-17.0.0.tbz"
       }
     },
     "version": "17.0.0",
