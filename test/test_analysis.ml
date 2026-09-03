@@ -705,3 +705,118 @@ let%test_unit "create returns None for a canceled game" =
      && Option.is_none (Analysis.create two_good_missions ~role_map:Avalonlib.role_map))
     ~expect:true
 ;;
+
+(* ----- positional mission-pattern badges ----- *)
+
+(* Shared builders for the pattern tests below. Failed missions carry one real fail vote
+   so neighboring num_fails-based detectors see coherent data. *)
+let fail_m ~team ~proposer =
+  Fixtures.make_mission
+    ~state:Fail
+    ~num_fails:1
+    ~size:(List.length team)
+    ~team
+    ~proposals:[ Fixtures.approved proposer team ]
+    ()
+;;
+
+let success_m ~team ~proposer = Fixtures.success ~size:(List.length team) ~team ~proposer
+
+(* ----- reversal_of_fortune ----- *)
+
+(* Positive: F,F,S,S,S with a good win. Negative: F,F,S,S,F — the pattern requires
+   missions 3-5 to share a state, so a differing final mission must not award it. *)
+let%test_unit "Reversal of fortune: good wins after losing the first two missions" =
+  let game last =
+    five_with
+      [ fail_m ~team:[ "ALICE"; "DAVE" ] ~proposer:"ALICE"
+      ; fail_m ~team:[ "BOB"; "CARL"; "EVE" ] ~proposer:"BOB"
+      ; success_m ~team:[ "ALICE"; "BOB" ] ~proposer:"CARL"
+      ; success_m ~team:[ "ALICE"; "BOB"; "CARL" ] ~proposer:"DAVE"
+      ; last
+      ]
+  in
+  let pos = game (success_m ~team:[ "ALICE"; "BOB"; "CARL" ] ~proposer:"EVE") in
+  let neg = game (fail_m ~team:[ "ALICE"; "BOB"; "DAVE" ] ~proposer:"EVE") in
+  [%test_result: string]
+    (pos_neg pos neg "Reversal of fortune")
+    ~expect:(lines [ "Good won the game despite losing first two missions"; "<absent>" ])
+;;
+
+(* S,S,F,F,F is the Stunning-comeback branch. Built on the evil-win fixture so the outcome
+   matches the story (the branch itself ignores [t.outcome]). *)
+let%test_unit "Stunning comeback: evil wins after losing the first two missions" =
+  let t =
+    analyze
+      { Fixtures.evil_win with
+        missions =
+          [ success_m ~team:[ "ALICE"; "BOB" ] ~proposer:"ALICE"
+          ; success_m ~team:[ "ALICE"; "BOB"; "CARL" ] ~proposer:"BOB"
+          ; fail_m ~team:[ "ALICE"; "DAVE" ] ~proposer:"CARL"
+          ; fail_m ~team:[ "BOB"; "CARL"; "EVE" ] ~proposer:"DAVE"
+          ; fail_m ~team:[ "ALICE"; "CARL"; "DAVE" ] ~proposer:"EVE"
+          ]
+      }
+  in
+  [%test_result: string]
+    (find_body t "Stunning comeback")
+    ~expect:"Evil won the game despite losing first two missions"
+;;
+
+(* ----- clean_sweep, Fail branch ----- *)
+
+(* Positive: the first three missions all failed (evil-win fixture). Negative: mission 3
+   succeeded, so the three states are not all equal. *)
+let%test_unit "Nasty, brutish, and short: three failed missions" =
+  let game third =
+    analyze
+      { Fixtures.evil_win with
+        missions =
+          [ fail_m ~team:[ "ALICE"; "DAVE" ] ~proposer:"ALICE"
+          ; fail_m ~team:[ "BOB"; "CARL"; "EVE" ] ~proposer:"BOB"
+          ; third
+          ; Fixtures.pending_mission ~size:3
+          ; Fixtures.pending_mission ~size:3
+          ]
+      }
+  in
+  let pos = game (fail_m ~team:[ "CARL"; "EVE" ] ~proposer:"CARL") in
+  let neg = game (success_m ~team:[ "ALICE"; "BOB" ] ~proposer:"CARL") in
+  [%test_result: string]
+    (pos_neg pos neg "Nasty, brutish, and short")
+    ~expect:(lines [ "Evil team dominated the game"; "<absent>" ])
+;;
+
+(* ----- trojan_horse ----- *)
+
+(* The majority test is [e * 2 > total]: 2 evil of 3 is a majority and fires; 2 evil of 4
+   is exactly half and must not. *)
+let%test_unit "Trojan horse: 2 evil of 3 is a majority, 2 of 4 is not" =
+  let game team = five_with [ fail_m ~team ~proposer:"ALICE" ] in
+  let pos = game [ "CARL"; "DAVE"; "EVE" ] in
+  let neg = game [ "BOB"; "CARL"; "DAVE"; "EVE" ] in
+  [%test_result: string]
+    (pos_neg pos neg "Trojan horse")
+    ~expect:(lines [ "Mission 1 had a majority evil team (2 of 3)"; "<absent>" ])
+;;
+
+(* ----- last_stand ----- *)
+
+(* Positive: S,F,S,F then a completed 5th mission — the score was 2-2 going in. Negative:
+   the same first four missions with the finale still pending must not award it. *)
+let%test_unit "Last stand: 2-2 after four missions with a completed finale" =
+  let game fifth =
+    five_with
+      [ success_m ~team:[ "ALICE"; "BOB" ] ~proposer:"ALICE"
+      ; fail_m ~team:[ "BOB"; "CARL"; "DAVE" ] ~proposer:"BOB"
+      ; success_m ~team:[ "ALICE"; "CARL" ] ~proposer:"CARL"
+      ; fail_m ~team:[ "ALICE"; "CARL"; "EVE" ] ~proposer:"DAVE"
+      ; fifth
+      ]
+  in
+  let pos = game (success_m ~team:[ "ALICE"; "BOB"; "CARL" ] ~proposer:"EVE") in
+  let neg = game (Fixtures.pending_mission ~size:3) in
+  [%test_result: string]
+    (pos_neg pos neg "Last stand")
+    ~expect:(lines [ "The score was 2-2 going into the final mission"; "<absent>" ])
+;;
