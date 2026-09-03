@@ -85,17 +85,10 @@
         # the matching preview versions from the oxcaml repos.
         query = {
           ocaml-variants = "5.2.0+ox";
-          # Pinned below 3.24: since oxcaml/opam-repository 5a5a760 the `oxcaml-dune` guard
-          # accepts upstream dune >= 3.24.2, so "*" resolves to it instead of the patched
-          # 3.22.2+ox. But dune 3.24.0 made `%{deps}` (and every path-valued pform) expand
-          # same-directory paths with a leading `./` (ocaml/dune#15156), and ppx_css's
-          # `css_inliner` — which bonsai_web's kado/legacy_view/partial_render_table
-          # stylesheets run via `(bash "%{bin:css_inliner} %{deps} ...")` — derives the
-          # module name from that path with `String.capitalize`, emitting
-          # `include ./app__generated`: a syntax error that fails the bonsai_web build
-          # (CI run 33622341785). The latest published ppx_css (130.106+341) still has it.
-          # Drop this pin once a ppx_css preview basenames its input (or bonsai_web stops
-          # relying on the old expansion); 3.22.2+ox is the newest OxCaml-patched dune.
+          # Not "*": the oxcaml repo now allows upstream dune >= 3.24.2, but dune 3.24
+          # expands `%{deps}` with a leading `./` (ocaml/dune#15156), which ppx_css's
+          # css_inliner turns into `include ./app__generated` and breaks bonsai_web.
+          # Drop the pin once a ppx_css preview basenames its input.
           dune = "3.22.2+ox";
           core = "*";
           bonsai = "*";
