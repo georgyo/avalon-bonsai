@@ -29,7 +29,9 @@ let waiting_row text =
 
 (* Fire [reset] whenever the active (mission, proposal) changes, to clear optimistic
    per-proposal local state. match%sub does not reset inactive-branch state in this Bonsai
-   version, so without this a vote/proposal on one round leaks into the next. *)
+   version, so without this a vote/proposal on one round leaks into the next. Also fire it
+   on activation: on_change's stored previous key survives deactivation, so a new game
+   that reaches the same (mission, proposal) indices would otherwise never reset. *)
 let on_proposal_change (local_ graph) ~reset =
   let key =
     let%arr m = State.value () in
@@ -37,6 +39,7 @@ let on_proposal_change (local_ graph) ~reset =
     | Some g -> g.current_mission_idx, g.current_proposal_idx
     | None -> -1, -1
   in
+  Bonsai.Edge.lifecycle ~on_activate:reset graph;
   Bonsai.Edge.on_change
     key
     ~equal:[%equal: int * int]
@@ -179,20 +182,27 @@ let mission_action (local_ graph) =
   let done_, set_done = Bonsai.state false graph in
   let error, set_error = Bonsai.state "" graph in
   (* reset the optimistic "already submitted" flag and any stale error banner whenever the
-     mission changes, so a vote (or failure) on one mission doesn't leak into the next *)
+     mission changes, so a vote (or failure) on one mission doesn't leak into the next —
+     and on activation, since on_change's stored previous key survives deactivation (a new
+     game at the same mission index would otherwise never reset) *)
   let midx =
     let%arr m = State.value () in
     match D.game m with
     | Some g -> g.current_mission_idx
     | None -> -1
   in
+  let reset =
+    let%arr set_done and set_error in
+    Effect.Many [ set_done false; set_error "" ]
+  in
+  let () = Bonsai.Edge.lifecycle ~on_activate:reset graph in
   let () =
     Bonsai.Edge.on_change
       midx
       ~equal:Int.equal
       ~callback:
-        (let%arr set_done and set_error in
-         fun _ -> Effect.Many [ set_done false; set_error "" ])
+        (let%arr reset in
+         fun _ -> reset)
       graph
   in
   let%arr m = State.value ()
@@ -330,7 +340,9 @@ type action_kind =
 (* Only the active action component is instantiated (via [match%sub]). Note that match%sub
    does NOT reset the inactive branch's state in this Bonsai version, so each pane
    explicitly resets its own optimistic flags via [on_proposal_change] (or an equivalent
-   on-change hook) to avoid state leaking across rounds and games. *)
+   on-change hook) to avoid state leaking across rounds, plus an on-activate lifecycle
+   reset — on_change's remembered key survives deactivation, so the activation reset is
+   what keeps state from leaking across games that reuse the same round indices. *)
 let action_pane ~selected (local_ graph) =
   let kind =
     let%arr m = State.value () in
