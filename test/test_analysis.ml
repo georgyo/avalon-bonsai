@@ -166,6 +166,40 @@ let%test_unit "By the skin of our teeth: hammer counting wraps around the seats"
          ])
 ;;
 
+(* Degenerate: an empty player list must not raise (the seat modulo would divide by zero);
+   the badge is simply skipped, matching the hammer guard in game.ml. *)
+let%test_unit "By the skin of our teeth: empty player list does not raise" =
+  let fail_m team proposer =
+    Fixtures.make_mission
+      ~state:Fail
+      ~num_fails:1
+      ~size:(List.length team)
+      ~team
+      ~proposals:[ Fixtures.approved proposer team ]
+      ()
+  in
+  let t =
+    analyze
+      { Fixtures.good_win with
+        players = []
+      ; missions =
+          [ fail_m [ "ALICE"; "DAVE" ] "BOB"
+          ; fail_m [ "BOB"; "CARL"; "EVE" ] "CARL"
+          ; Fixtures.make_mission
+              ~state:Success
+              ~size:2
+              ~team:[ "ALICE"; "BOB" ]
+              ~proposals:
+                [ Fixtures.rejected "BOB" [ "BOB"; "DAVE" ]
+                ; Fixtures.approved "EVE" [ "ALICE"; "BOB" ]
+                ]
+              ()
+          ]
+      }
+  in
+  [%test_result: string] (find_body t "By the skin of our teeth") ~expect:"<absent>"
+;;
+
 (* ----- same_team ----- *)
 
 (* Positive: the same pair proposed three times in a row (order within the team must not
