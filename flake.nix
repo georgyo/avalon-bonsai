@@ -85,7 +85,11 @@
         # the matching preview versions from the oxcaml repos.
         query = {
           ocaml-variants = "5.2.0+ox";
-          dune = "*";
+          # Not "*": the oxcaml repo now allows upstream dune >= 3.24.2, but dune 3.24
+          # expands `%{deps}` with a leading `./` (ocaml/dune#15156), which ppx_css's
+          # css_inliner turns into `include ./app__generated` and breaks bonsai_web.
+          # Drop the pin once a ppx_css preview basenames its input.
+          dune = "3.22.2+ox";
           core = "*";
           bonsai = "*";
           bonsai_web = "*";
