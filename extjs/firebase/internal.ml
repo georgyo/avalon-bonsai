@@ -20,7 +20,10 @@ let to_opt (v : any) : any option = if is_nullish v then None else Some v
 
 let field_string_opt (o : any) (k : string) : string option =
   let v = Js.Unsafe.get o (str k) in
-  if is_nullish v then None else Some (Js.to_string (Js.Unsafe.coerce v))
+  if (not (is_nullish v))
+     && String.equal (Js.to_string (Js.typeof (Js.Unsafe.coerce v))) "string"
+  then Some (Js.to_string (Js.Unsafe.coerce v))
+  else None
 ;;
 
 let field_string ?(default = "") o k = Option.value (field_string_opt o k) ~default

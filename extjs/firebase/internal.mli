@@ -16,7 +16,7 @@ val is_nullish : any -> bool
 (** [None] iff {!is_nullish}. *)
 val to_opt : any -> any option
 
-(** Read a string-valued field, [None] when absent/nullish. *)
+(** Read a string-valued field; [None] when absent, nullish, or not a string. *)
 val field_string_opt : any -> string -> string option
 
 val field_string : ?default:string -> any -> string -> string
