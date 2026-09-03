@@ -108,7 +108,8 @@ let mission_node (g : Game.t) ~close =
 
 let end_node (g : Game.t) ~close =
   match Game.outcome g with
-  | None -> N.none
+  | None ->
+    fallback_node ~title:"Game Over" ~message:"The game outcome is not available." ~close
   | Some o ->
     let title, title_tint =
       match o.state with

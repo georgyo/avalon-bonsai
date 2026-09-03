@@ -17,4 +17,4 @@ esbuild entry.mjs --bundle --format=iife --target=es2015 --outfile=.build/step1.
 babel --config-file ./.babelrc.json .build/step1.js -o .build/step2.js
 cat node_modules/regenerator-runtime/runtime.js .build/step2.js > .build/step3.js
 esbuild .build/step3.js --minify --outfile=../vendor/firebase-shim.js
-echo "built firebase/vendor/firebase-shim.js ($(wc -c < ../vendor/firebase-shim.js) bytes)"
+echo "built extjs/firebase/vendor/firebase-shim.js ($(wc -c < ../vendor/firebase-shim.js) bytes)"

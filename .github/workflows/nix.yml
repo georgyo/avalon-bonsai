@@ -25,7 +25,7 @@ jobs:
           node-version: 24
 
       - name: Verify the vendored Firebase shim matches its sources
-        # firebase/vendor/firebase-shim.js is committed; rebuilding it from the pinned
+        # extjs/firebase/vendor/firebase-shim.js is committed; rebuilding it from the pinned
         # package-lock.json must be a no-op, or someone changed the shim sources (or bumped
         # the SDK) without re-vendoring.
         run: |
@@ -35,7 +35,7 @@ jobs:
           git diff --exit-code ../vendor/firebase-shim.js
 
       - name: Verify the vendored Temporal polyfill matches its sources
-        # Same deal as the Firebase shim: temporal/vendor/temporal-shim.js is committed
+        # Same deal as the Firebase shim: extjs/temporal/vendor/temporal-shim.js is committed
         # (core's timezone loader needs it on browsers without native Temporal, i.e.
         # Safari); rebuilding from the pinned package-lock.json must be a no-op.
         run: |

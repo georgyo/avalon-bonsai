@@ -3,7 +3,9 @@ open Types
 open Util
 
 (** Port of client/src/avalon-analysis.ts: post-game achievement ("badge") detection.
-    [create] returns [None] for games without an outcome. *)
+    [create] returns [None] for games without an outcome, or with a canceled one (the
+    detectors assume completed missions and would misfire on a canceled game's mostly
+    pending ones). *)
 
 type badge =
   { title : string
@@ -50,8 +52,7 @@ let initial l =
 
 let create (game : game_data) ~(role_map : role String.Map.t) : t option =
   match game.outcome with
-  | None -> None
-  | Some outcome ->
+  | Some outcome when not (equal_outcome_state outcome.state Canceled) ->
     let team_of_role role =
       match Map.find role_map role with
       | Some r -> Some r.team
@@ -98,6 +99,7 @@ let create (game : game_data) ~(role_map : role String.Map.t) : t option =
       ; missions
       ; completed_missions
       }
+  | _ -> None
 ;;
 
 let name_of_role t role = Map.find t.names_by_role role
@@ -475,38 +477,44 @@ let almost_lost t =
   else (
     let players = Array.of_list t.game.players in
     let nplayers = Array.length players in
-    let player_index name =
-      Array.findi players ~f:(fun _ p -> str_eq p name)
-      |> Option.map ~f:fst
-      |> Option.value ~default:(-1)
-    in
-    let num_fails = ref 0 in
-    List.find_mapi t.missions ~f:(fun idx me ->
-      let result =
-        match List.last me.m.proposals with
-        | Some last_p when !num_fails = 2 && List.length me.m.proposals < 5 ->
-          let num_behind = 5 - List.length me.m.proposals in
-          let proposer = ref last_p.proposer in
-          let players_behind = ref [] in
-          for _ = 0 to num_behind - 1 do
-            let pidx = player_index !proposer in
-            proposer := players.((pidx + 1) % nplayers);
-            players_behind := !proposer :: !players_behind
-          done;
-          if not (List.for_all !players_behind ~f:(fun p -> is_evil t p))
-          then
-            Some
-              { title = "By the skin of our teeth"
-              ; body =
-                  sprintf
-                    "Good came close to losing on mission %d when evil team had hammer"
-                    (idx + 1)
-              }
-          else None
-        | Some _ | None -> None
+    (* An empty player list would make the modulo below raise; skip the badge instead
+       (same guard as the hammer computation in game.ml). A proposer who is not in the
+       player list still yields index -1 / seat 0 — a JS quirk this port preserves. *)
+    if nplayers = 0
+    then None
+    else (
+      let player_index name =
+        Array.findi players ~f:(fun _ p -> str_eq p name)
+        |> Option.map ~f:fst
+        |> Option.value ~default:(-1)
       in
-      if equal_mission_state me.m.state Fail then incr num_fails;
-      result))
+      let num_fails = ref 0 in
+      List.find_mapi t.missions ~f:(fun idx me ->
+        let result =
+          match List.last me.m.proposals with
+          | Some last_p when !num_fails = 2 && List.length me.m.proposals < 5 ->
+            let num_behind = 5 - List.length me.m.proposals in
+            let proposer = ref last_p.proposer in
+            let players_behind = ref [] in
+            for _ = 0 to num_behind - 1 do
+              let pidx = player_index !proposer in
+              proposer := players.((pidx + 1) % nplayers);
+              players_behind := !proposer :: !players_behind
+            done;
+            if not (List.for_all !players_behind ~f:(fun p -> is_evil t p))
+            then
+              Some
+                { title = "By the skin of our teeth"
+                ; body =
+                    sprintf
+                      "Good came close to losing on mission %d when evil team had hammer"
+                      (idx + 1)
+                }
+            else None
+          | Some _ | None -> None
+        in
+        if equal_mission_state me.m.state Fail then incr num_fails;
+        result)))
 ;;
 
 let psychic_powers t =

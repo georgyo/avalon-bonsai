@@ -156,6 +156,15 @@ let firestore () =
 
 (* ---- subscription bookkeeping ---- *)
 let user_doc_unsub : (unit -> unit) option ref = ref None
+
+let unsubscribe_user_doc () =
+  match !user_doc_unsub with
+  | Some u ->
+    u ();
+    user_doc_unsub := None
+  | None -> ()
+;;
+
 let lobby_unsubs : (unit -> unit) list ref = ref []
 
 let lobby_name () =
@@ -236,7 +245,20 @@ let lobby_doc_updated snap =
     | None -> ()
     | Some lob ->
       (match Snapshot.data snap with
-       | None -> unsubscribe_from_lobby () (* lobby deleted *)
+       | None ->
+         (* Lobby deleted server-side. Besides tearing down the listeners, clear the local
+            user's lobby pointer — otherwise [Derived.initialized] stays false and the app
+            hangs on the loading screen with no further snapshot to save it — and ask the
+            server to drop the stale pointer from the user doc too. That has to go through
+            /login: it deletes the pointer transactionally when the lobby doc is gone,
+            whereas /leave rejects with 404 before touching the user doc. *)
+         unsubscribe_from_lobby ();
+         update ~f:(fun m ->
+           { m with user = Option.map m.user ~f:(fun u -> { u with lobby = None }) });
+         (match Auth.current_user (auth ()) with
+          | Some u -> Api.login ~auth:(auth ()) (Auth.User.email u)
+          | None -> ());
+         Toast.show (sprintf "Lobby %s no longer exists" lob.name)
        | Some snap_data ->
          let new_data = Parse.lobby_data snap_data in
          let game = Game.create new_data.game ~role_map:Avalonlib.role_map in
@@ -422,17 +444,23 @@ let on_auth_state_changed (user : Auth.User.t option) =
              });
            Ffi.replace_state_to_pathname ())
      | None -> update ~f:(fun m -> { m with auth_initialized = true }));
-    (match !user_doc_unsub with
-     | Some u ->
-       u ();
-       user_doc_unsub := None
-     | None -> ());
+    unsubscribe_user_doc ();
     (* Tear down lobby listeners too: they must not keep running unauthenticated, and
        [subscribe_to_lobby] refuses to resubscribe on a later re-login while [m.lobby] is
        still [Some]. *)
     unsubscribe_from_lobby ();
     update ~f:(fun m -> { m with user = None })
   | Some user ->
+    (* Defensive: drop any previous user-doc listener before registering a new one, so a
+       Some -> Some auth transition can't leak a listener that keeps clobbering
+       [Model.user] with the old uid's doc (same teardown the lobby listeners get). *)
+    unsubscribe_user_doc ();
+    (* Likewise tear down any previous user's lobby subscriptions: on a direct Some ->
+       Some switch into the same lobby, [user_doc_updated]'s lobby match takes the
+       no-change branch and would keep the role listener bound to the old uid
+       (lobbies/<name>/roles/<old-uid>). Clearing [Model.lobby] here makes the new user's
+       first snapshot resubscribe with the new uid. No-op on a fresh sign-in. *)
+    unsubscribe_from_lobby ();
     (* Call login unconditionally (even for anonymous users with no email) so the server
        creates the user doc; otherwise createLobby fails with "No such user". *)
     Api.login ~auth:(auth ()) (Auth.User.email user) ~on_err:(fun _ ->
