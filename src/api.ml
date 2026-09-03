@@ -60,7 +60,14 @@ let post
                   let msg =
                     match Ffi.field_string_opt json "message" with
                     | Some m -> m
-                    | None -> Ffi.field_string resp "statusText"
+                    | None ->
+                      (* Over HTTP/2 statusText is the empty string per the Fetch spec,
+                         which would render a blank toast. *)
+                      let st = Ffi.field_string resp "statusText" in
+                      if String.is_empty st
+                      then
+                        sprintf "Request failed (HTTP %d)" (Ffi.field_int resp "status")
+                      else st
                   in
                   on_err msg))))
 ;;
