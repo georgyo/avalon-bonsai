@@ -177,10 +177,7 @@ let swap_at (l : 'a list) i =
 (* ---- building blocks, rendered with ppx_html + the Style module ---- *)
 let div ?(attrs = []) children = {%html|<div *{attrs}>*{children}</div>|}
 let spanc ?(attrs = []) children = {%html|<span *{attrs}>*{children}</span>|}
-
-let card ?(attrs = []) children =
-  {%html|<div *{Style.card :: attrs}>*{children}</div>|}
-;;
+let card ?(attrs = []) children = {%html|<div *{Style.card :: attrs}>*{children}</div>|}
 
 let card_title ?(attrs = []) children =
   {%html|<div *{Style.card_title :: attrs}>*{children}</div>|}
@@ -196,9 +193,7 @@ let btn ?(attrs = []) ?(disabled = false) ?(loading = false) ~on_click children 
   in
   (* keep the label while loading (prepend the spinner) so the button doesn't collapse *)
   let children =
-    if loading
-    then {%html|<span *{[ Style.spinner ]}></span>|} :: children
-    else children
+    if loading then {%html|<span *{[ Style.spinner ]}></span>|} :: children else children
   in
   {%html|<button *{attrs} on_click=%{fun _ -> on_click}>*{children}</button>|}
 ;;

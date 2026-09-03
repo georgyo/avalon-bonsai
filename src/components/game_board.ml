@@ -19,17 +19,19 @@ module Style =
 
 let game_board (local_ graph) =
   let selected, set_selected = Bonsai.state [] graph ~equal:(List.equal String.equal) in
-  (* clear the team selection whenever the phase changes (original cleared on phase watch) *)
-  let phase =
+  (* clear the team selection whenever the phase or the game lifecycle changes: keying on
+     the phase alone would let a proposer's checked players survive a canceled game into
+     the next game's first proposal (a canceled game keeps its last phase) *)
+  let phase_and_state =
     let%arr m = State.value () in
     match D.game m with
-    | Some g -> Game.phase g
-    | None -> Types.Unknown_phase ""
+    | Some g -> Game.phase g, Some (Game.state g)
+    | None -> Types.Unknown_phase "", None
   in
   let () =
     Bonsai.Edge.on_change
-      phase
-      ~equal:Types.equal_phase
+      phase_and_state
+      ~equal:[%equal: Types.phase * Types.game_state option]
       ~callback:
         (let%arr set_selected in
          fun _ -> set_selected [])
