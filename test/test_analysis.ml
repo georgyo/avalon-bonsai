@@ -662,3 +662,46 @@ let%test_unit "badges for an evil win by assassination" =
          ; "- Bullseye: The assassin correctly identified and killed Merlin"
          ])
 ;;
+
+(* ----- create refuses canceled games ----- *)
+
+(* A canceled game's missions are largely pending, and several detectors would misfire on
+   them (clean_sweep on three equal M_pending states; reversal_of_fortune's Success branch
+   on S,S,P,P,P). [create] must return [None] for a canceled outcome so the pure library
+   never produces badges for such games. *)
+let%test_unit "create returns None for a canceled game" =
+  let s ~size ~team ~proposer =
+    Fixtures.make_mission
+      ~state:Success
+      ~size
+      ~team
+      ~proposals:[ Fixtures.approved_by team proposer team ]
+      ()
+  in
+  let all_pending =
+    Fixtures.seven_game
+      ~outcome_state:Canceled
+      ~missions:
+        [ Fixtures.pending_mission ~size:2
+        ; Fixtures.pending_mission ~size:3
+        ; Fixtures.pending_mission ~size:3
+        ; Fixtures.pending_mission ~size:4
+        ; Fixtures.pending_mission ~size:4
+        ]
+  in
+  let two_good_missions =
+    Fixtures.seven_game
+      ~outcome_state:Canceled
+      ~missions:
+        [ s ~size:2 ~team:[ "ALICE"; "BOB" ] ~proposer:"ALICE"
+        ; s ~size:3 ~team:[ "ALICE"; "BOB"; "CARL" ] ~proposer:"BOB"
+        ; Fixtures.pending_mission ~size:3
+        ; Fixtures.pending_mission ~size:4
+        ; Fixtures.pending_mission ~size:4
+        ]
+  in
+  [%test_result: bool]
+    (Option.is_none (Analysis.create all_pending ~role_map:Avalonlib.role_map)
+     && Option.is_none (Analysis.create two_good_missions ~role_map:Avalonlib.role_map))
+    ~expect:true
+;;

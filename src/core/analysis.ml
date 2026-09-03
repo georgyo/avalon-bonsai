@@ -3,7 +3,9 @@ open Types
 open Util
 
 (** Port of client/src/avalon-analysis.ts: post-game achievement ("badge") detection.
-    [create] returns [None] for games without an outcome. *)
+    [create] returns [None] for games without an outcome, or with a canceled one (the
+    detectors assume completed missions and would misfire on a canceled game's mostly
+    pending ones). *)
 
 type badge =
   { title : string
@@ -50,8 +52,7 @@ let initial l =
 
 let create (game : game_data) ~(role_map : role String.Map.t) : t option =
   match game.outcome with
-  | None -> None
-  | Some outcome ->
+  | Some outcome when not (equal_outcome_state outcome.state Canceled) ->
     let team_of_role role =
       match Map.find role_map role with
       | Some r -> Some r.team
@@ -98,6 +99,7 @@ let create (game : game_data) ~(role_map : role String.Map.t) : t option =
       ; missions
       ; completed_missions
       }
+  | _ -> None
 ;;
 
 let name_of_role t role = Map.find t.names_by_role role
