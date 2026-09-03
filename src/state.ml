@@ -236,7 +236,20 @@ let lobby_doc_updated snap =
     | None -> ()
     | Some lob ->
       (match Snapshot.data snap with
-       | None -> unsubscribe_from_lobby () (* lobby deleted *)
+       | None ->
+         (* Lobby deleted server-side. Besides tearing down the listeners, clear the local
+            user's lobby pointer — otherwise [Derived.initialized] stays false and the app
+            hangs on the loading screen with no further snapshot to save it — and ask the
+            server to drop the stale pointer from the user doc too. That has to go through
+            /login: it deletes the pointer transactionally when the lobby doc is gone,
+            whereas /leave rejects with 404 before touching the user doc. *)
+         unsubscribe_from_lobby ();
+         update ~f:(fun m ->
+           { m with user = Option.map m.user ~f:(fun u -> { u with lobby = None }) });
+         (match Auth.current_user (auth ()) with
+          | Some u -> Api.login ~auth:(auth ()) (Auth.User.email u)
+          | None -> ());
+         Toast.show (sprintf "Lobby %s no longer exists" lob.name)
        | Some snap_data ->
          let new_data = Parse.lobby_data snap_data in
          let game = Game.create new_data.game ~role_map:Avalonlib.role_map in
