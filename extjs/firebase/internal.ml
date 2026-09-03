@@ -73,9 +73,9 @@ let promise_then (p : any) ~(on_ok : any -> unit) ~(on_err : any -> unit) : unit
      : any)
 ;;
 
-(* The modular SDK is shipped as a vendored bundle (firebase/shim, built to
-   firebase/vendor/firebase-shim.js) that is embedded into the page bundle via
-   [(js_of_ocaml (javascript_files ...))] in [firebase/dune] — exactly like the
+(* The modular SDK is shipped as a vendored bundle (extjs/firebase/shim, built to
+   extjs/firebase/vendor/firebase-shim.js) that is embedded into the page bundle via
+   [(js_of_ocaml (javascript_files ...))] in [extjs/firebase/dune] — exactly like the
    bonsai_web_components bindings ship their JS. It runs at startup and exposes its named
    exports on [globalThis.__fb], so they are present synchronously with no gstatic CDN and
    no runtime dynamic [import()]. [on_ready] simply snapshots that global once and runs
@@ -90,7 +90,7 @@ let on_ready ?(on_error = fun () -> ()) (f : unit -> unit) : unit =
     then (
       console_error
         "Firebase SDK bundle missing: globalThis.__fb is not set \
-         (firebase/vendor/firebase-shim.js not embedded?)"
+         (extjs/firebase/vendor/firebase-shim.js not embedded?)"
         [||];
       on_error ())
     else (

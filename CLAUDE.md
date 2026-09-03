@@ -42,12 +42,12 @@ Deployment: every push to `master` publishes the Nix-built bundle to GitHub Page
 
 - **Warning 70 is a hard error everywhere** (`-w +70 -warn-error +70` in every dune file):
   every new `.ml` module must have a matching `.mli`.
-- **The `firebase/` library is deliberately Core-free** (Stdlib only, `js_of_ocaml` its
+- **The `extjs/firebase/` library is deliberately Core-free** (Stdlib only, `js_of_ocaml` its
   only dependency). `open! Core` would shadow its `Error` module. Watch the Stdlib
   differences: `List.map f list` argument order, no `String.is_empty`.
-- The vendored JS bundles `firebase/vendor/firebase-shim.js` and
-  `temporal/vendor/temporal-shim.js` are committed and CI verifies them: after any change
-  under `firebase/shim/` or `temporal/shim/`, run `npm ci && npm run build` in that shim
+- The vendored JS bundles `extjs/firebase/vendor/firebase-shim.js` and
+  `extjs/temporal/vendor/temporal-shim.js` are committed and CI verifies them: after any change
+  under `extjs/firebase/shim/` or `extjs/temporal/shim/`, run `npm ci && npm run build` in that shim
   directory and commit the result (comment-only `entry.mjs` changes are a no-op — esbuild
   strips comments — but rebuild anyway to be sure). Embedded bundles must stay
   generator-free ES5 (the build pipelines handle this); jsoo's embedded-JS printer mangles
@@ -61,13 +61,13 @@ Deployment: every push to `master` publishes the Nix-built bundle to GitHub Page
 
 Six dune units, layered bottom-up:
 
-- `firebase/` — typed bindings to the Firebase v12 **modular** SDK, one file per upstream
+- `extjs/firebase/` — typed bindings to the Firebase v12 **modular** SDK, one file per upstream
   module (`app`, `auth`, `firestore`, `error`), mirroring the upstream API shapes; mli docs
   quote the upstream reference. `firebase.ml` is the wrapped library's main module and the
   only external surface — it re-exports the submodules and hides `internal.ml` (shared
   js_of_ocaml plumbing). Cross-module abstract-type converters (`App.to_any`,
   `Error.of_any`) exist but are hidden from odoc with `(**/**)`. The SDK itself is not
-  fetched at runtime: an ES5 bundle built by `firebase/shim/build.sh` is embedded into the
+  fetched at runtime: an ES5 bundle built by `extjs/firebase/shim/build.sh` is embedded into the
   executable via the `javascript_files` stanza and exposes its exports on
   `globalThis.__fb`.
 - `src/core/` (`avalon_core`) — pure, JS-free game logic (roles, derived game state,
@@ -79,8 +79,8 @@ Six dune units, layered bottom-up:
 - `src/components/` (`avalon_components`) — all UI as Vdom, using `ppx_css` (co-located
   styles, no stylesheet files) and `ppx_html`. Replaces Vuetify by hand-rolled components
   in `ui.ml`.
-- `temporal/` — a module-less carrier library embedding a vendored Temporal polyfill
-  (same shim/vendor pattern as `firebase/`). core's jsoo timezone loader drives the JS
+- `extjs/temporal/` — a module-less carrier library embedding a vendored Temporal polyfill
+  (same shim/vendor pattern as `extjs/firebase/`). core's jsoo timezone loader drives the JS
   Temporal API; Safari has no native `globalThis.Temporal`, and without the
   `globalThis.TemporalPolyfill` fallback this provides, the app crashes at startup on
   iOS with `"unknown zone" <local zone>` (blank page).

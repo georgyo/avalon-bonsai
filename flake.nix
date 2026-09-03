@@ -224,7 +224,8 @@
         # "the materialized package definitions are stale" (run 30162609745). Re-enable
         # with `{ inherit repos; }` once opam-nix identifies repositories by something
         # implementation-independent. The file still records the identities; nothing reads
-        # them. Staleness is guarded by package-defs.lock instead — see scripts/.
+        # them. Staleness is guarded by package-defs.lock instead — see the
+        # update-package-defs-lock flake app.
         scope = (on.materializedDefsToScope { } ./package-defs.json).overrideScope overlay;
 
         overlay = final: prev: {

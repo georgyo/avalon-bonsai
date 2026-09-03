@@ -2,7 +2,7 @@
   "name": "avalon-firebase-shim",
   "version": "1.0.0",
   "private": true,
-  "description": "Vendored Firebase v12 modular bundle for the avalon-bonsai client (populates globalThis.__fb; embedded into main.bc.js via firebase/dune).",
+  "description": "Vendored Firebase v12 modular bundle for the avalon-bonsai client (populates globalThis.__fb; embedded into main.bc.js via extjs/firebase/dune).",
   "dependencies": {
     "firebase": "12.15.0"
   },

@@ -1,4 +1,4 @@
-# firebase/shim — vendored Firebase SDK bundle
+# extjs/firebase/shim — vendored Firebase SDK bundle
 
 `entry.mjs` imports the exact Firebase v12 modular functions the OCaml bindings in
 `../firebase.ml` call and re-exports them on `globalThis.__fb`. The build produces
@@ -10,7 +10,7 @@ runtime `import()`** (`Firebase.on_ready` just snapshots `globalThis.__fb`).
 ## Rebuild
 
 ```sh
-cd firebase/shim
+cd extjs/firebase/shim
 npm install
 npm run build        # -> ../vendor/firebase-shim.js  (commit the result)
 ```
