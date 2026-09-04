@@ -21,6 +21,16 @@ module Document_snapshot = struct
   let data (snap : t) : Js.Unsafe.any option =
     Internal.to_opt (Js.Unsafe.meth_call snap "data" [||])
   ;;
+
+  (* [metadata] and [fromCache] are plain properties, not methods. *)
+  let from_cache (snap : t) : bool =
+    match Internal.to_opt (Js.Unsafe.get snap (str "metadata")) with
+    | None -> false
+    | Some md ->
+      (match Internal.to_opt (Js.Unsafe.get md (str "fromCache")) with
+       | None -> false
+       | Some b -> Js.to_bool (Js.Unsafe.coerce b))
+  ;;
 end
 
 let get_firestore (app : App.t) : t =

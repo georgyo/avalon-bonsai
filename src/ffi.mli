@@ -43,5 +43,10 @@ val set_document_title : string -> unit
 val replace_state_to_pathname : unit -> unit
 val alert : string -> unit
 val reload_page : unit -> unit
+
+(** [set_timeout ~ms f] schedules [f] to run once after [ms] milliseconds and returns a
+    cancel function ([clearTimeout]; safe to call after the timer fired). *)
+val set_timeout : ms:float -> (unit -> unit) -> unit -> unit
+
 val url_has_param : string -> bool
 val url_get_param : string -> string option

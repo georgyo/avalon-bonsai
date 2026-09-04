@@ -115,6 +115,11 @@ let replace_state_to_pathname () : unit =
 let alert (msg : string) : unit = window##alert (str msg)
 let reload_page () : unit = ignore (Js.Unsafe.meth_call location "reload" [||] : any)
 
+let set_timeout ~ms (f : unit -> unit) : unit -> unit =
+  let id = Dom_html.window##setTimeout (Js.wrap_callback f) (Js.number_of_float ms) in
+  fun () -> Dom_html.window##clearTimeout id
+;;
+
 (* GET arguments of the current URL, decoded — [Url.Current.arguments] replaces a manual
    URLSearchParams construction. *)
 let url_has_param (name : string) : bool =
