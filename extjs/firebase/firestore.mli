@@ -43,6 +43,13 @@ module Document_snapshot : sig
       raw JS object (for the avalon [Parse] module), or [None] if the document doesn't
       exist. *)
   val data : t -> Js.Unsafe.any option
+
+  (** [DocumentSnapshot.metadata.fromCache] — "True if the snapshot was created from
+      cached data rather than guaranteed up-to-date server data." A cache-sourced
+      [exists = false] snapshot does not prove the document was deleted (the doc may
+      simply be uncached while the backend is unreachable). Defensively [false] when the
+      metadata object is absent. *)
+  val from_cache : t -> bool
 end
 
 (** [getFirestore(app)] — "Returns the existing default Firestore instance that is

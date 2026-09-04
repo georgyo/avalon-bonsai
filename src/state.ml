@@ -245,6 +245,13 @@ let lobby_doc_updated snap =
     | None -> ()
     | Some lob ->
       (match Snapshot.data snap with
+       | None when Snapshot.from_cache snap ->
+         (* A cache-sourced [exists = false] snapshot only means the doc isn't in the
+            local cache while the backend is unreachable — not that the lobby was deleted.
+            Running the deletion recovery here would tear down a live lobby. Keep the
+            listener: either the server snapshot arrives, or the connect watchdog in
+            [subscribe_to_lobby] bounds the wait. *)
+         ()
        | None ->
          (* Lobby deleted server-side. Besides tearing down the listeners, clear the local
             user's lobby pointer — otherwise [Derived.initialized] stays false and the app
@@ -256,7 +263,12 @@ let lobby_doc_updated snap =
          update ~f:(fun m ->
            { m with user = Option.map m.user ~f:(fun u -> { u with lobby = None }) });
          (match Auth.current_user (auth ()) with
-          | Some u -> Api.login ~auth:(auth ()) (Auth.User.email u)
+          | Some u ->
+            Api.login
+              ~auth:(auth ())
+              ~on_err:(fun _ ->
+                Toast.show "Couldn't clear your old lobby — try reloading.")
+              (Auth.User.email u)
           | None -> ());
          Toast.show (sprintf "Lobby %s no longer exists" lob.name)
        | Some snap_data ->
@@ -344,6 +356,11 @@ let lobby_doc_updated snap =
   | exn -> on_callback_exn exn
 ;;
 
+(* Grace period before the connect watchdog in [subscribe_to_lobby] intervenes:
+   comfortably above Firestore's initial-listen latency and its early reconnect backoff
+   steps (avoiding false positives), while still bounding how long the spinner can show. *)
+let lobby_connect_grace_ms = 15_000.
+
 let subscribe_to_lobby name =
   let m = model () in
   match m.lobby with
@@ -380,7 +397,51 @@ let subscribe_to_lobby name =
         ]
       | Some _ | None -> []
     in
-    lobby_unsubs := u1 :: role_unsubs
+    (* Connect watchdog. The REST calls and the Firestore listen stream are independent
+       transports, so a successful create/join can be followed by a listen stream that
+       stalls before delivering the first lobby snapshot — leaving [connected] false and
+       the spinner up forever, with no error callback ever firing and nothing to retry. If
+       we are still not connected after a generous grace period, fall back to a one-shot
+       [get_doc] (a fresh request) and feed it to the normal snapshot handler; if even
+       that fails, surface the same kind of persistent reload screen as a terminal
+       listener error. On the happy path the first snapshot flips [connected] within
+       milliseconds and the timer's guard no-ops; teardown cancels the timer via
+       [lobby_unsubs]. The get_doc round trip itself is not cancelable, so both callbacks
+       re-check [still_waiting] at resolution time: by then the user may have switched
+       lobbies (feeding a stale snapshot to [lobby_doc_updated] could clobber the new
+       lobby, or run the deletion recovery against it) or the listener may have connected
+       (an older snapshot could regress data and replay toasts). *)
+    let cancel_watchdog =
+      let still_waiting () =
+        match (model ()).lobby with
+        | Some l -> String.equal l.name name && not l.connected
+        | None -> false
+      in
+      let could_not_connect () =
+        update ~f:(fun m ->
+          { m with
+            connection_error = Some "Couldn't connect to the lobby. Please reload."
+          })
+      in
+      Ffi.set_timeout ~ms:lobby_connect_grace_ms (fun () ->
+        if still_waiting ()
+        then
+          Firestore.get_doc
+            (Firestore.doc (firestore ()) [ "lobbies"; name ])
+            ~on_ok:(fun snap ->
+              if still_waiting ()
+              then
+                if (not (Snapshot.exists snap)) && Snapshot.from_cache snap
+                then
+                  (* Offline getDoc can resolve from a cached tombstone instead of
+                     rejecting; [lobby_doc_updated]'s fromCache guard would swallow it and
+                     the spinner would be back to spinning forever. Treat it as the
+                     connection failure it is. *)
+                  could_not_connect ()
+                else lobby_doc_updated snap)
+            ~on_err:(fun _ -> if still_waiting () then could_not_connect ()))
+    in
+    lobby_unsubs := cancel_watchdog :: u1 :: role_unsubs
 ;;
 
 (* ---- user doc + auth ---- *)
