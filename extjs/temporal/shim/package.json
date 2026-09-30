@@ -4,13 +4,13 @@
   "private": true,
   "description": "Vendored Temporal polyfill for the avalon-bonsai client (populates globalThis.TemporalPolyfill for core's timezone_js_loader; embedded into main.bc.js via extjs/temporal/dune).",
   "dependencies": {
-    "temporal-polyfill": "0.3.0"
+    "temporal-polyfill": "1.0.5"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.0",
-    "@babel/core": "^7.28.0",
-    "@babel/preset-env": "^7.28.0",
-    "esbuild": "^0.28.1",
+    "@babel/cli": "^8.0.6",
+    "@babel/core": "^8.0.6",
+    "@babel/preset-env": "^8.0.6",
+    "esbuild": "^0.28.2",
     "regenerator-runtime": "^0.14.1"
   },
   "scripts": {
