@@ -15,7 +15,7 @@ npm install
 npm run build        # -> ../vendor/firebase-shim.js  (commit the result)
 ```
 
-Built with firebase 12.15.0, esbuild 0.28.1, @babel/preset-env 7.28.
+Built with firebase 12.19.0, esbuild 0.28.2, @babel/preset-env 8.0.
 
 ## Why the build is more than `esbuild --bundle` (important)
 
