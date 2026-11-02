@@ -61,7 +61,7 @@ Deployment: every push to `master` publishes the Nix-built bundle to GitHub Page
 
 Six dune units, layered bottom-up:
 
-- `extjs/firebase/` — typed bindings to the Firebase v12 **modular** SDK, one file per upstream
+- `extjs/firebase/` — typed bindings to the Firebase v13 **modular** SDK, one file per upstream
   module (`app`, `auth`, `firestore`, `error`), mirroring the upstream API shapes; mli docs
   quote the upstream reference. `firebase.ml` is the wrapped library's main module and the
   only external surface — it re-exports the submodules and hides `internal.ml` (shared
