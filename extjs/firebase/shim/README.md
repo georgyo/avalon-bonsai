@@ -1,6 +1,6 @@
 # extjs/firebase/shim — vendored Firebase SDK bundle
 
-`entry.mjs` imports the exact Firebase v12 modular functions the OCaml bindings in
+`entry.mjs` imports the exact Firebase v13 modular functions the OCaml bindings in
 `../firebase.ml` call and re-exports them on `globalThis.__fb`. The build produces
 `../vendor/firebase-shim.js` (committed), which `../dune` embeds into `main.bc.js` via
 `(js_of_ocaml (javascript_files ...))` — the same way the bonsai_web_components bindings ship
@@ -15,7 +15,7 @@ npm install
 npm run build        # -> ../vendor/firebase-shim.js  (commit the result)
 ```
 
-Built with firebase 12.19.0, esbuild 0.28.2, @babel/preset-env 8.0.
+Built with firebase 13.2.0, esbuild 0.28.2, @babel/preset-env 8.0.
 
 ## Why the build is more than `esbuild --bundle` (important)
 

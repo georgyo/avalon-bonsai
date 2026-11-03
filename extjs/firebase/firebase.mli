@@ -1,4 +1,4 @@
-(** Typed bindings to the Firebase v12 {e modular} JS SDK — one OCaml module per SDK entry
+(** Typed bindings to the Firebase v13 {e modular} JS SDK — one OCaml module per SDK entry
     point, mirroring the upstream API surface
     ({:https://firebase.google.com/docs/reference/js}):
 

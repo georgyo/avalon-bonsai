@@ -1,4 +1,4 @@
-// Entry point for the vendored Firebase v12 modular SDK bundle.
+// Entry point for the vendored Firebase v13 modular SDK bundle.
 //
 // esbuild bundles exactly these imports (plus their transitive deps) into one minified IIFE
 // and we expose them on globalThis.__fb, which the js_of_ocaml bindings (../app.ml,

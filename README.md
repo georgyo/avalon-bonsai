@@ -19,7 +19,7 @@ src/         avalon — the js_of_ocaml / Bonsai client:
   state        reactive store: Model in a Bonsai.Expert.Var; Firebase listeners + actions
   style        co-located component CSS via ppx_css (replaces Vuetify's styles)
   view         all UI components in Vdom (replaces the Vuetify components)
-extjs/firebase/  firebase — typed bindings to the Firebase v12 modular SDK
+extjs/firebase/  firebase — typed bindings to the Firebase v13 modular SDK
 extjs/temporal/  temporal_shim — vendored Temporal polyfill (core's jsoo timezone loader
                needs it on browsers without native Temporal, i.e. Safari/iOS)
 test/        avalon_tests — inline_test suites over avalon_core
@@ -131,7 +131,7 @@ custom domain is configured in the repo's Pages settings). The REST API at
 
 - Built with the cont Bonsai API; the imperative Firebase listeners push snapshots into a
   single `Bonsai.Expert.Var` that drives the whole UI.
-- The Firebase v12 modular SDK is not fetched at runtime: a vendored ES5 bundle
+- The Firebase v13 modular SDK is not fetched at runtime: a vendored ES5 bundle
   (`extjs/firebase/vendor/firebase-shim.js`, rebuilt with `extjs/firebase/shim/build.sh`) is embedded
   ahead of the OCaml code in `main.bc.js` and exposes its exports on `globalThis.__fb`;
   if that global is missing the app shows an error instead of hanging on a spinner (it
